@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreCategoryRequest;
+use App\Http\Requests\UpdateCategoryRequest;
 use App\Models\Category;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -45,6 +47,27 @@ class CategoryController extends Controller
             'page' => (int) $page,
             'limit' => (int) $limit,
             'totalPages' => $totalPages,
+        ]);
+    }
+
+    public function store(StoreCategoryRequest $request): JsonResponse
+    {
+        $category = Category::create($request->validated());
+
+        return response()->json([
+            'message' => 'Tạo danh mục thành công.',
+            'data' => $category,
+        ], 201);
+    }
+
+    public function update(UpdateCategoryRequest $request, int $id): JsonResponse
+    {
+        $category = Category::findOrFail($id);
+        $category->update($request->validated());
+
+        return response()->json([
+            'message' => 'Cập nhật danh mục thành công.',
+            'data' => $category,
         ]);
     }
 }
