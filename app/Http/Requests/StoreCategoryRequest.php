@@ -14,6 +14,15 @@ class StoreCategoryRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('is_active')) {
+            $this->merge([
+                'is_active' => filter_var($this->is_active, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE),
+            ]);
+        }
+    }
+
     /**
      * Get the validation rules that apply to the request.
      */
@@ -25,6 +34,7 @@ class StoreCategoryRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:500'],
             'sort_order' => ['required', 'integer', 'min:0'],
             'is_active' => ['required', 'boolean'],
+            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'],
         ];
     }
 
@@ -48,6 +58,9 @@ class StoreCategoryRequest extends FormRequest
             'sort_order.min' => 'Thứ tự sắp xếp phải lớn hơn hoặc bằng 0.',
             'is_active.required' => 'Trạng thái là bắt buộc.',
             'is_active.boolean' => 'Trạng thái phải là true hoặc false.',
+            'image.image' => 'File phải là hình ảnh.',
+            'image.mimes' => 'Ảnh phải có định dạng: jpeg, png, jpg, gif, webp.',
+            'image.max' => 'Ảnh không được vượt quá 2MB.',
         ];
     }
 }

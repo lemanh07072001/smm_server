@@ -6,11 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCategoryRequest;
 use App\Http\Requests\UpdateCategoryRequest;
 use App\Models\Category;
+use App\Services\ImageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CategoryController extends Controller
 {
+    public function __construct(
+        private ImageService $imageService
+    ) {}
     public function index(Request $request): JsonResponse
     {
         $limit = $request->input('limit', 10);
@@ -52,7 +56,14 @@ class CategoryController extends Controller
 
     public function store(StoreCategoryRequest $request): JsonResponse
     {
-        $category = Category::create($request->validated());
+        $data = $request->validated();
+        unset($data['image']);
+
+        if ($request->hasFile('image')) {
+            $data['image'] = $this->imageService->upload($request->file('image'), 'categories', 400, 85);
+        }
+
+        $category = Category::create($data);
 
         return response()->json([
             'message' => 'Tạo danh mục thành công.',
@@ -60,14 +71,63 @@ class CategoryController extends Controller
         ], 201);
     }
 
+    public function show(int $id): JsonResponse
+    {
+        $category = Category::findOrFail($id);
+
+        return response()->json([
+            'data' => $category,
+        ]);
+    }
+
     public function update(UpdateCategoryRequest $request, int $id): JsonResponse
     {
         $category = Category::findOrFail($id);
-        $category->update($request->validated());
+        $data = $request->validated();
+        unset($data['image']);
+
+        if ($request->hasFile('image')) {
+            $this->imageService->delete($category->image);
+            $data['image'] = $this->imageService->upload($request->file('image'), 'categories', 400, 85);
+        }
+
+        $category->update($data);
 
         return response()->json([
             'message' => 'Cập nhật danh mục thành công.',
             'data' => $category,
+        ]);
+    }
+
+    public function destroy(int $id): JsonResponse
+    {
+        $category = Category::findOrFail($id);
+
+        $this->imageService->delete($category->image);
+
+        $category->delete();
+
+        return response()->json([
+            'message' => 'Xóa danh mục thành công.',
+        ]);
+    }
+
+    public function destroyMultiple(Request $request): JsonResponse
+    {
+        $request->validate([
+            'ids' => ['required', 'array', 'min:1'],
+            'ids.*' => ['required', 'integer', 'exists:categories,id'],
+        ]);
+
+        $categories = Category::whereIn('id', $request->ids)->get();
+        foreach ($categories as $category) {
+            $this->imageService->delete($category->image);
+        }
+
+        $count = Category::whereIn('id', $request->ids)->delete();
+
+        return response()->json([
+            'message' => "Đã xóa {$count} danh mục thành công.",
         ]);
     }
 }
