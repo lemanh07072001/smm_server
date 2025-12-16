@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Provider extends Model
 {
@@ -27,5 +28,8 @@ class Provider extends Model
         'balance_updated_at' => 'datetime',
     ];
 
-   
+    public function services(): HasMany
+    {
+        return $this->hasMany(ProviderService::class);
+    }
 }

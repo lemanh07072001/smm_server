@@ -126,4 +126,15 @@ class ProviderController extends Controller
             'message' => "Đã xóa {$count} provider thành công.",
         ]);
     }
+
+    public function getProvider(): JsonResponse
+    {
+        $providers = Provider::where('is_active', 1)
+            ->orderBy('name', 'asc')
+            ->get(['id', 'name', 'code']);
+
+        return response()->json([
+            'data' => $providers,
+        ]);
+    }
 }

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ProviderController;
+use App\Http\Controllers\Api\ProviderServiceController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -41,6 +42,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/providers', [ProviderController::class, 'index']);
     Route::post('/providers', [ProviderController::class, 'store']);
     Route::post('/providers/delete-multiple', [ProviderController::class, 'destroyMultiple']);
+    Route::get('/providers/{id}', [ProviderController::class, 'show']);
     Route::post('/providers/{id}', [ProviderController::class, 'update']);
     Route::delete('/providers/{id}', [ProviderController::class, 'destroy']);
+    Route::post('/get-providers', [ProviderController::class, 'getProvider']);
+
+    // Provider Services
+    Route::get('/provider-services', [ProviderServiceController::class, 'index']);
+    Route::post('/provider-services', [ProviderServiceController::class, 'store']);
+    Route::post('/provider-services/delete-multiple', [ProviderServiceController::class, 'destroyMultiple']);
+    Route::get('/provider-services/{id}', [ProviderServiceController::class, 'show']);
+    Route::post('/provider-services/{id}', [ProviderServiceController::class, 'update']);
+    Route::delete('/provider-services/{id}', [ProviderServiceController::class, 'destroy']);
 });
