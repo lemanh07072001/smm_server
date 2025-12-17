@@ -28,6 +28,10 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'balance',
+        'discount',
+        'api_key',
+        'is_active',
     ];
 
     /**
@@ -49,6 +53,9 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
         'role' => 'integer',
+        'balance' => 'decimal:6',
+        'discount' => 'decimal:2',
+        'is_active' => 'boolean',
     ];
 
     /**

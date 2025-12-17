@@ -4,6 +4,8 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ProviderController;
 use App\Http\Controllers\Api\ProviderServiceController;
+use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -54,4 +56,22 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/provider-services/{id}', [ProviderServiceController::class, 'show']);
     Route::post('/provider-services/{id}', [ProviderServiceController::class, 'update']);
     Route::delete('/provider-services/{id}', [ProviderServiceController::class, 'destroy']);
+
+    // Services
+    Route::get('/services', [ServiceController::class, 'index']);
+    Route::post('/services', [ServiceController::class, 'store']);
+    Route::post('/services/delete-multiple', [ServiceController::class, 'destroyMultiple']);
+    Route::get('/services/{id}', [ServiceController::class, 'show']);
+    Route::post('/services/{id}', [ServiceController::class, 'update']);
+    Route::delete('/services/{id}', [ServiceController::class, 'destroy']);
+
+    // Users
+    Route::get('/users', [UserController::class, 'index']);
+    Route::post('/users', [UserController::class, 'store']);
+    Route::post('/users/delete-multiple', [UserController::class, 'destroyMultiple']);
+    Route::get('/users/{id}', [UserController::class, 'show']);
+    Route::post('/users/{id}', [UserController::class, 'update']);
+    Route::delete('/users/{id}', [UserController::class, 'destroy']);
+    Route::post('/users/{id}/reset-password', [UserController::class, 'resetPassword']);
+    Route::post('/users/{id}/generate-api-key', [UserController::class, 'generateApiKey']);
 });
