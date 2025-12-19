@@ -10,9 +10,80 @@ class Service extends Model
 {
     use HasFactory;
 
+    public const PLATFORM = [
+        '1' => [
+            'CODE'  => '1',
+            'TEXT'  => 'Facebook',
+            'group' => [
+                'fb_feel'           => 'Cảm xúc Facebook',
+                'fb_follow'         => 'Follow Facebook',
+                'fb_like_page'      => 'Like page Facebook',
+                'fb_join_group'     => 'Join group Facebook',
+                'fb_review'         => 'Review Facebook',
+                'fb_like_cmt'       => 'Like comment Facebook',
+                'fb_share'          => 'Share Facebook',
+                'fb_comment'        => 'Comment Facebook',
+                'fb_mix'            => 'Facebook Mix',
+                'fb_add_friends'    => 'Facebook Add Friends',
+            ]
+        ],
+        '2' => [
+            'CODE'  => '2',
+            'TEXT'  => 'Tiktok',
+            'group' => [
+                'tiktok_like'                               => 'Like Tiktok',
+                'tiktok_like_livestream_multiple_in_post'   => 'Like Tiktok',
+                'tiktok_follow'                             => 'Follow Tiktok',
+                'tiktok_comment'                            => 'Comment Tiktok',
+                'tiktok_comment_livestream'                 => 'Comment Tiktok Livestream',
+                'tiktok_share'                              => 'Share Tiktok',
+            ]
+        ],
+        '3' => [
+            'CODE'  => '3',
+            'TEXT'  => 'Twitter',
+            'group' => [
+                'twitter_like'      => 'Like Twitter',
+                'twitter_comment'   => 'Comment Twitter',
+                'twitter_follow'    => 'Follow Twitter',
+                'twitter_mix'       => 'Mix Twitter',
+            ]
+        ],
+        '4' => [
+            'CODE'  => '4',
+            'TEXT'  => 'Instagram',
+            'group' => [
+                'ig_like'      => 'Like Instagram',
+                'ig_comment'   => 'Comment Instagram',
+                'ig_follow'    => 'Follow Instagram',
+            ]
+        ],
+        '5' => [
+            'CODE'  => '5',
+            'TEXT'  => 'Youtube',
+            'group' => [
+                'youtube_like'          => 'Like Youtube',
+                'youtube_like_all'      => 'Like All Name Youtube',
+                'youtube_dislike'       => 'Dislike Youtube',
+                'youtube_dislike_all'   => 'Dislike All Name Youtube',
+                'youtube_comment'       => 'Comment Youtube',
+                'youtube_comment_all'   => 'Comment Youtube',
+                'youtube_follow'        => 'Follow Youtube',
+                'youtube_follow_all'    => 'Follow Youtube',
+            ]
+        ],
+        '6' => [
+            'CODE'  => '6',
+            'TEXT'  => 'Zalo',
+            'group' => [
+                'zalo_send_message_multiple' => 'Zalo Send Message Multiple',
+            ]
+        ],
+    ];
+
     protected $fillable = [
         'category_id',
-        'platform_id',
+        'category_group_id',
         'group_id',
         'provider_service_id',
         'name',
@@ -23,24 +94,31 @@ class Service extends Model
         'sort_order',
         'priority',
         'is_active',
+        'allow_multiple_reactions',
     ];
 
     protected $casts = [
         'category_id' => 'integer',
-        'platform_id' => 'integer',
-        'group_id' => 'integer',
+        'category_group_id' => 'integer',
+        'group_id' => 'string',
         'provider_service_id' => 'integer',
-        'sell_rate' => 'decimal:6',
+        'sell_rate' => 'decimal:2',
         'min_quantity' => 'integer',
         'max_quantity' => 'integer',
         'sort_order' => 'integer',
         'priority' => 'integer',
         'is_active' => 'boolean',
+        'allow_multiple_reactions' => 'boolean',
     ];
 
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function categoryGroup(): BelongsTo
+    {
+        return $this->belongsTo(CategoryGroup::class);
     }
 
     public function providerService(): BelongsTo

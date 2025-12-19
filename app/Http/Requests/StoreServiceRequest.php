@@ -32,8 +32,8 @@ class StoreServiceRequest extends FormRequest
     {
         return [
             'category_id' => ['required', 'integer', 'exists:categories,id'],
-            'platform_id' => ['nullable', 'integer'],
-            'group_id' => ['nullable', 'integer'],
+            'category_group_id' => ['nullable', 'integer', 'exists:category_groups,id'],
+            'group_id' => ['nullable', 'string'],
             'provider_service_id' => ['required', 'integer', 'exists:provider_services,id'],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
@@ -43,6 +43,7 @@ class StoreServiceRequest extends FormRequest
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'priority' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
+            'allow_multiple_reactions' => ['nullable', 'boolean'],
         ];
     }
 

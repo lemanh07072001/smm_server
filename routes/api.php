@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\CategoryGroupController;
 use App\Http\Controllers\Api\ProviderController;
 use App\Http\Controllers\Api\ProviderServiceController;
 use App\Http\Controllers\Api\ServiceController;
@@ -36,9 +37,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/categories', [CategoryController::class, 'index']);
     Route::post('/categories', [CategoryController::class, 'store']);
     Route::post('/categories/delete-multiple', [CategoryController::class, 'destroyMultiple']);
+    Route::get('/categories/all', [CategoryController::class, 'all']);
     Route::get('/categories/{id}', [CategoryController::class, 'show']);
     Route::post('/categories/{id}', [CategoryController::class, 'update']);
     Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
+
+    // Category Groups
+    Route::get('/category-groups', [CategoryGroupController::class, 'index']);
+    Route::post('/category-groups', [CategoryGroupController::class, 'store']);
+    Route::post('/category-groups/delete-multiple', [CategoryGroupController::class, 'destroyMultiple']);
+    Route::get('/category-groups/all', [CategoryGroupController::class, 'all']);
+    Route::get('/category-groups/{id}', [CategoryGroupController::class, 'show']);
+    Route::post('/category-groups/{id}', [CategoryGroupController::class, 'update']);
+    Route::delete('/category-groups/{id}', [CategoryGroupController::class, 'destroy']);
 
     // Providers
     Route::get('/providers', [ProviderController::class, 'index']);
@@ -53,6 +64,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/provider-services', [ProviderServiceController::class, 'index']);
     Route::post('/provider-services', [ProviderServiceController::class, 'store']);
     Route::post('/provider-services/delete-multiple', [ProviderServiceController::class, 'destroyMultiple']);
+    Route::get('/provider-services/all', [ProviderServiceController::class, 'all']);
     Route::get('/provider-services/{id}', [ProviderServiceController::class, 'show']);
     Route::post('/provider-services/{id}', [ProviderServiceController::class, 'update']);
     Route::delete('/provider-services/{id}', [ProviderServiceController::class, 'destroy']);
@@ -61,6 +73,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/services', [ServiceController::class, 'index']);
     Route::post('/services', [ServiceController::class, 'store']);
     Route::post('/services/delete-multiple', [ServiceController::class, 'destroyMultiple']);
+    Route::get('/services/platforms', [ServiceController::class, 'platforms']);
+    Route::get('/services/all', [ServiceController::class, 'all']);
     Route::get('/services/{id}', [ServiceController::class, 'show']);
     Route::post('/services/{id}', [ServiceController::class, 'update']);
     Route::delete('/services/{id}', [ServiceController::class, 'destroy']);

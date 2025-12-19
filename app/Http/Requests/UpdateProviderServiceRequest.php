@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateProviderServiceRequest extends FormRequest
 {
@@ -22,9 +23,18 @@ class UpdateProviderServiceRequest extends FormRequest
 
     public function rules(): array
     {
+        $id = $this->route('id');
+
         return [
             'provider_id' => ['required', 'integer', 'exists:providers,id'],
-            'provider_service_code' => ['required', 'string', 'max:50'],
+            'provider_service_code' => [
+                'required',
+                'string',
+                'max:50',
+                Rule::unique('provider_services')->where(function ($query) {
+                    return $query->where('provider_id', $this->provider_id);
+                })->ignore($id),
+            ],
             'name' => ['required', 'string', 'max:255'],
             'category_name' => ['nullable', 'string', 'max:100'],
             'cost_rate' => ['required', 'numeric', 'min:0'],
@@ -41,6 +51,7 @@ class UpdateProviderServiceRequest extends FormRequest
             'provider_id.exists' => 'Provider không tồn tại.',
             'provider_service_code.required' => 'Mã dịch vụ là bắt buộc.',
             'provider_service_code.max' => 'Mã dịch vụ không được vượt quá 50 ký tự.',
+            'provider_service_code.unique' => 'Mã dịch vụ đã tồn tại cho provider này.',
             'name.required' => 'Tên dịch vụ là bắt buộc.',
             'name.max' => 'Tên dịch vụ không được vượt quá 255 ký tự.',
             'cost_rate.required' => 'Giá mua là bắt buộc.',

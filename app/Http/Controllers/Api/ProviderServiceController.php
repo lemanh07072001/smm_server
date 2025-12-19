@@ -112,4 +112,16 @@ class ProviderServiceController extends Controller
             'message' => "Đã xóa {$count} dịch vụ provider thành công.",
         ]);
     }
+
+    public function all(): JsonResponse
+    {
+        $providerServices = ProviderService::with(['provider', 'services'])
+            ->where('is_active', 1)
+            ->orderBy('name', 'asc')
+            ->get();
+
+        return response()->json([
+            'data' => $providerServices,
+        ]);
+    }
 }

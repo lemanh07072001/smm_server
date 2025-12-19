@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreServiceRequest;
 use App\Http\Requests\UpdateServiceRequest;
+use App\Models\CategoryGroup;
 use App\Models\Service;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -116,6 +117,31 @@ class ServiceController extends Controller
 
         return response()->json([
             'message' => "Đã xóa {$count} dịch vụ thành công.",
+        ]);
+    }
+
+    public function platforms(): JsonResponse
+    {
+        return response()->json([
+            'data' => Service::PLATFORM,
+        ]);
+    }
+
+    public function all(): JsonResponse
+    {
+        $categoryGroups = CategoryGroup::where('is_active', 1)
+            ->orderBy('sort_order', 'asc')
+            ->orderBy('name', 'asc')
+            ->with(['services' => function ($query) {
+                $query->where('is_active', 1)
+                    ->with(['category', 'providerService'])
+                    ->orderBy('sort_order', 'asc')
+                    ->orderBy('name', 'asc');
+            }])
+            ->get();
+
+        return response()->json([
+            'data' => $categoryGroups,
         ]);
     }
 }

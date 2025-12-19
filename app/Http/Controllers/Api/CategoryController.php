@@ -130,4 +130,16 @@ class CategoryController extends Controller
             'message' => "Đã xóa {$count} danh mục thành công.",
         ]);
     }
+
+    public function all(): JsonResponse
+    {
+        $categories = Category::where('is_active', 1)
+            ->orderBy('sort_order', 'asc')
+            ->orderBy('name', 'asc')
+            ->get();
+
+        return response()->json([
+            'data' => $categories,
+        ]);
+    }
 }

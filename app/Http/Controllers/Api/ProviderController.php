@@ -127,7 +127,7 @@ class ProviderController extends Controller
         ]);
     }
 
-    public function getProvider(): JsonResponse
+    public function all(): JsonResponse
     {
         $providers = Provider::where('is_active', 1)
             ->orderBy('name', 'asc')

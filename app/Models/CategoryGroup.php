@@ -7,31 +7,28 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class ProviderService extends Model
+class CategoryGroup extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'provider_id',
-        'provider_service_code',
+        'category_id',
         'name',
-        'category_name',
-        'cost_rate',
-        'min_quantity',
-        'max_quantity',
+        'slug',
+        'icon',
+        'sort_order',
         'is_active',
-        'last_synced_at',
     ];
 
     protected $casts = [
+        'category_id' => 'integer',
+        'sort_order' => 'integer',
         'is_active' => 'boolean',
-        'cost_rate' => 'decimal:2',
-        'last_synced_at' => 'datetime',
     ];
 
-    public function provider(): BelongsTo
+    public function category(): BelongsTo
     {
-        return $this->belongsTo(Provider::class);
+        return $this->belongsTo(Category::class);
     }
 
     public function services(): HasMany
