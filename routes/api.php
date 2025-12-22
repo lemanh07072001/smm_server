@@ -26,6 +26,7 @@ use Illuminate\Support\Facades\Route;
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::get('/categories/all', [CategoryController::class, 'all']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -39,7 +40,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/categories', [CategoryController::class, 'index']);
     Route::post('/categories', [CategoryController::class, 'store']);
     Route::post('/categories/delete-multiple', [CategoryController::class, 'destroyMultiple']);
-    Route::get('/categories/all', [CategoryController::class, 'all']);
     Route::get('/categories/{id}', [CategoryController::class, 'show']);
     Route::post('/categories/{id}', [CategoryController::class, 'update']);
     Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
