@@ -27,6 +27,9 @@ use Illuminate\Support\Facades\Route;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/categories/all', [CategoryController::class, 'all']);
+Route::get('/category-groups/all', [CategoryGroupController::class, 'all']);
+Route::get('/services/all', [ServiceController::class, 'all']);
+Route::post('/get-providers', [ProviderController::class, 'getProvider']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -48,7 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/category-groups', [CategoryGroupController::class, 'index']);
     Route::post('/category-groups', [CategoryGroupController::class, 'store']);
     Route::post('/category-groups/delete-multiple', [CategoryGroupController::class, 'destroyMultiple']);
-    Route::get('/category-groups/all', [CategoryGroupController::class, 'all']);
+
     Route::get('/category-groups/{id}', [CategoryGroupController::class, 'show']);
     Route::post('/category-groups/{id}', [CategoryGroupController::class, 'update']);
     Route::delete('/category-groups/{id}', [CategoryGroupController::class, 'destroy']);
@@ -60,7 +63,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/providers/{id}', [ProviderController::class, 'show']);
     Route::post('/providers/{id}', [ProviderController::class, 'update']);
     Route::delete('/providers/{id}', [ProviderController::class, 'destroy']);
-    Route::post('/get-providers', [ProviderController::class, 'getProvider']);
+
 
     // Provider Services
     Route::get('/provider-services', [ProviderServiceController::class, 'index']);
@@ -76,7 +79,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/services', [ServiceController::class, 'store']);
     Route::post('/services/delete-multiple', [ServiceController::class, 'destroyMultiple']);
     Route::get('/services/platforms', [ServiceController::class, 'platforms']);
-    Route::get('/services/all', [ServiceController::class, 'all']);
+
     Route::get('/services/{id}', [ServiceController::class, 'show']);
     Route::post('/services/{id}', [ServiceController::class, 'update']);
     Route::delete('/services/{id}', [ServiceController::class, 'destroy']);
