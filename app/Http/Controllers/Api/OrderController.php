@@ -14,6 +14,137 @@ use Illuminate\Support\Facades\Log;
 
 class OrderController extends Controller
 {
+    /**
+     * Display a listing of orders.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $limit = $request->input('limit', 10);
+        $page = $request->input('page', 1);
+        $search = $request->input('search');
+        $status = $request->input('status');
+        $userId = $request->input('user_id');
+        $serviceId = $request->input('service_id');
+        $providerServiceId = $request->input('provider_service_id');
+        $isFinalized = $request->input('is_finalized');
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+
+        $query = Order::with(['user', 'service', 'providerService'])
+            ->orderBy('created_at', 'desc');
+
+        // Search theo link hoặc provider_order_id
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('link', 'like', "%{$search}%")
+                  ->orWhere('provider_order_id', 'like', "%{$search}%")
+                  ->orWhereHas('user', function ($userQuery) use ($search) {
+                      $userQuery->where('name', 'like', "%{$search}%")
+                                ->orWhere('email', 'like', "%{$search}%");
+                  })
+                  ->orWhereHas('service', function ($serviceQuery) use ($search) {
+                      $serviceQuery->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // Filter theo status
+        if ($status !== null) {
+            $query->where('status', $status);
+        }
+
+
+        // Filter theo ngày bắt đầu
+        if ($startDate) {
+            $query->whereDate('created_at', '>=', $startDate);
+        }
+
+        // Filter theo ngày kết thúc
+        if ($endDate) {
+            $query->whereDate('created_at', '<=', $endDate);
+        }
+
+        $total = $query->count();
+        $totalPages = (int) ceil($total / $limit);
+
+        $orders = $query->skip(($page - 1) * $limit)
+            ->take($limit)
+            ->get();
+
+        return response()->json([
+            'data' => $orders,
+            'total' => $total,
+            'page' => (int) $page,
+            'limit' => (int) $limit,
+            'totalPages' => $totalPages,
+        ]);
+    }
+
+    /**
+     * Lấy tất cả đơn hàng theo user_id và thống kê số lượng từng trạng thái.
+     */
+    public function getOrdersByUser(Request $request, int $userId): JsonResponse
+    {
+        $search = $request->input('search');
+        $status = $request->input('status');
+
+        // Query orders của user
+        $query = Order::with(['service'])
+            ->where('user_id', $userId);
+
+        // Filter theo status (nếu status là "all" thì lấy tất cả)
+        if ($status !== null && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        // Tìm kiếm theo link, provider_order_id hoặc tên service
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('link', 'like', "%{$search}%")
+                  ->orWhere('provider_order_id', 'like', "%{$search}%")
+                  ->orWhereHas('service', function ($serviceQuery) use ($search) {
+                      $serviceQuery->where('name', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // Lấy tất cả orders của user (chỉ load service, không load user và providerService)
+        $orders = $query->orderBy('created_at', 'desc')->get();
+
+        // Thống kê số lượng từng trạng thái bằng groupBy (hiệu quả hơn)
+        $statusCountsQuery = Order::where('user_id', $userId);
+   
+
+        $statusCountsRaw = $statusCountsQuery
+            ->selectRaw('status, COUNT(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status')
+            ->toArray();
+
+        // Khởi tạo tất cả status với giá trị 0
+        $statusCounts = [
+            'pending' => $statusCountsRaw['pending'] ?? 0,
+            'processing' => $statusCountsRaw['processing'] ?? 0,
+            'in_progress' => $statusCountsRaw['in_progress'] ?? 0,
+            'completed' => $statusCountsRaw['completed'] ?? 0,
+            'partial' => $statusCountsRaw['partial'] ?? 0,
+            'canceled' => $statusCountsRaw['canceled'] ?? 0,
+            'refunded' => $statusCountsRaw['refunded'] ?? 0,
+            'failed' => $statusCountsRaw['failed'] ?? 0,
+        ];
+
+        // Tính tổng số đơn hàng
+        $totalOrders = $orders->count();
+
+        return response()->json([
+            'data' => [
+                'orders' => $orders,
+                'total' => $totalOrders,
+                'status_counts' => $statusCounts,
+            ],
+        ]);
+    }
+
     public function addOrder(Request $request): JsonResponse
     {
         // Validate request

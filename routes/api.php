@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CategoryGroupController;
+use App\Http\Controllers\Api\CodeTransactionController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ProviderController;
 use App\Http\Controllers\Api\ProviderServiceController;
@@ -91,5 +92,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/users/{id}/generate-api-key', [UserController::class, 'generateApiKey']);
 
     // Orders
+    Route::get('/orders', [OrderController::class, 'index']);
+    Route::get('/orders/user/{userId}', [OrderController::class, 'getOrdersByUser']);
     Route::post('/add-order', [OrderController::class, 'addOrder']);
+
+    // Code Transactions
+    Route::post('/code-transactions', [CodeTransactionController::class, 'store']);
 });
