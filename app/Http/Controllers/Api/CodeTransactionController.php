@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CodeTransaction;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Redis;
 
 class CodeTransactionController extends Controller
 {
