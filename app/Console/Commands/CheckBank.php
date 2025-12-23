@@ -46,6 +46,13 @@ class CheckBank extends Command
         foreach ($keys as $key) {
             $data = RedisHelper::get($key, RedisHelper::REDIS_CODE_TRANSACTIONS);
             $data = json_decode($data, true);
+
+            // Bỏ qua nếu data null hoặc không có transaction_code
+            if (empty($data) || !isset($data['transaction_code'])) {
+                $this->warn("⚠️  Bỏ qua key không hợp lệ: {$key}");
+                continue;
+            }
+
             $codeData = $data['transaction_code'];
 
             if (isset($datas['transactions']) && $datas['transactions']) {
