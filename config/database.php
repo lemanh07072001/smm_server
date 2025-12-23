@@ -125,7 +125,7 @@ return [
 
         'options' => [
             'cluster' => env('REDIS_CLUSTER', 'redis'),
-            'prefix' => env('REDIS_PREFIX', Str::slug(env('APP_NAME', 'laravel'), '_').'_database_'),
+            'prefix' => env('REDIS_PREFIX', Str::slug(env('APP_NAME', 'laravel'), '_') . '_database_'),
         ],
 
         'default' => [
@@ -152,7 +152,17 @@ return [
             'username' => env('REDIS_CODE_TRANSACTIONS_USERNAME'),
             'password' => env('REDIS_CODE_TRANSACTIONS_PASSWORD'),
             'port' => env('REDIS_CODE_TRANSACTIONS_PORT', '6379'),
-            'database' => env('REDIS_CODE_TRANSACTIONS_DB', '0'),
+            'database' => env('REDIS_CODE_TRANSACTIONS_DB', '2'),
+            'prefix' => '',
+        ],
+
+        'order_web_redis' => [
+            'url' => env('REDIS_ORDER_WEB_URL'),
+            'host' => env('REDIS_ORDER_WEB_HOST', '127.0.0.1'),
+            'username' => env('REDIS_ORDER_WEB_USERNAME'),
+            'password' => env('REDIS_ORDER_WEB_PASSWORD'),
+            'port' => env('REDIS_ORDER_WEB_PORT', '6379'),
+            'database' => env('REDIS_ORDER_WEB_DB', '2'),
             'prefix' => '',
         ],
 

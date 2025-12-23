@@ -10,6 +10,7 @@ class Order extends Model
 {
     use HasFactory;
 
+    const KEY_ID_REDIS_ORDER = 'key_id_redis_order';
     /**
      * Status constants
      */

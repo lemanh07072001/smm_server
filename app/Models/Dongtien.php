@@ -12,15 +12,23 @@ class Dongtien extends Model
 
     protected $table = 'dongtien';
 
+    // Type constants
+    public const TYPE_DEPOSIT = 'deposit';
+    public const TYPE_CHARGE = 'charge';
+    public const TYPE_REFUND = 'refund';
+    public const TYPE_ADJUSTMENT = 'adjustment';
+
     protected $fillable = [
-        'sotientruoc',
-        'sotienthaydoi',
-        'sotiensau',
+        'balance_before',
+        'amount',
+        'balance_after',
         'thoigian',
         'noidung',
         'user_id',
         'order_id',
+        'payment_method',
         'type',
+        'payment_ref',
         'scan',
         'datas',
         'is_payment_affiliate',
@@ -28,9 +36,9 @@ class Dongtien extends Model
     ];
 
     protected $casts = [
-        'sotientruoc' => 'integer',
-        'sotienthaydoi' => 'integer',
-        'sotiensau' => 'integer',
+        'balance_before' => 'decimal:6',
+        'amount' => 'decimal:6',
+        'balance_after' => 'decimal:6',
         'thoigian' => 'datetime',
         'scan' => 'integer',
         'is_payment_affiliate' => 'integer',

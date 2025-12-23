@@ -96,8 +96,8 @@ class TelegramHelper
     // $botToken = '6583965991:AAEn_8XNyiCtPT8dWz4dqe0oYXaspjbkbQ0';
     // $chatId = '865710636';
 
-    $botToken = '7353116187:AAG5AedPFoyMyHrJ7P_YlgMSLfEHvv0aGLU';
-    $chatId = '-1003297203249';
+    $botToken = '8580146778:AAH3kK1gyEb4xz2GCysIxe3j2lg3YaRpKjI';
+    $chatId = '7675836140';
 
     $url = "https://api.telegram.org/bot{$botToken}/sendMessage";
     $data = [

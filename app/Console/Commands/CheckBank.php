@@ -163,13 +163,15 @@ class CheckBank extends Command
 
 
                                     $dongtien = [
-                                        'sotientruoc'     => (int)$usernaptien['balance'],
-                                        'sotienthaydoi'   => $amout,
-                                        'sotiensau'       => (int)$usernaptien['balance'] + $amout,
+                                        'balance_before'  => (int)$usernaptien['balance'],
+                                        'amount'          => $amout,
+                                        'balance_after'   => (int)$usernaptien['balance'] + $amout,
                                         'thoigian'        => date('Y-m-d H:i:s', strtotime($str_date)),
                                         'noidung'         => 'Nạp tiền thành công.',
                                         'user_id'         => $userId,
-                                        'type'            => 'NAPTIEN',
+                                        'type'            => Dongtien::TYPE_DEPOSIT,
+                                        'payment_method'  => 'bank',
+                                        'payment_ref'     => $Reference,
                                         'datas'           => json_encode($bankauto),
                                         'bank_auto_id'    => $bank_auto->id,
                                     ];
