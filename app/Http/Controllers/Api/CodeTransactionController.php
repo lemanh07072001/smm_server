@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Helpers\RedisHelper;
 use App\Http\Controllers\Controller;
 use App\Models\CodeTransaction;
 use Illuminate\Http\JsonResponse;
@@ -30,15 +31,15 @@ class CodeTransactionController extends Controller
 
         // Lưu mã giao dịch vào Redis với connection riêng
         try {
-            $redis = Redis::connection('code_transactions_redis');
-            $redisKey = 'code_transaction:' . $codeTransaction->id;
+            $redis = Redis::connection(RedisHelper::REDIS_CODE_TRANSACTIONS);
+            $redisKey = $codeTransaction->transaction_code;
             $redisData = [
                 'id' => $codeTransaction->id,
                 'transaction_code' => $codeTransaction->transaction_code,
                 'created_at' => $codeTransaction->created_at->toDateTimeString(),
                 'updated_at' => $codeTransaction->updated_at->toDateTimeString(),
             ];
-            
+
             // Lưu vào Redis với TTL 30 ngày (2592000 giây)
             $redis->setex($redisKey, 2592000, json_encode($redisData));
 

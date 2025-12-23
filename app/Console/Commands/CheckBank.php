@@ -62,13 +62,13 @@ class CheckBank extends Command
                 $filtered = array_values($filtered);
 
 
+                       
                 foreach ($filtered as $transaction) {
                     $userId = null;
 
                     $Reference = $transaction['Reference'];
 
                     $lichsu = BankAuto::where('tid', $Reference)->first();
-
 
 
                     if (!$lichsu) {
@@ -141,6 +141,7 @@ class CheckBank extends Command
 
                         DB::beginTransaction();
 
+
                         if ($userId) {
                             $bankauto['user_id'] = $userId;
 
@@ -168,7 +169,7 @@ class CheckBank extends Command
 
 
                                     Dongtien::create($dongtien);
-                                    $usernaptien->sodu      = $usernaptien['balance'] + $amout;
+                                    $usernaptien->balance      = $usernaptien['balance'] + $amout;
                                     // $usernaptien->sotiennap = $usernaptien['sotiennap'] + $amout;
                                     $usernaptien->save();
 
