@@ -29,7 +29,12 @@
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/"
-        }
+        },
+        "files": [
+            "app/Helpers/TelegramHelper.php",
+            "app/Helpers/RedisHelper.php",
+            "app/Helpers/OrderHelper.php"
+        ]
     },
     "autoload-dev": {
         "psr-4": {
