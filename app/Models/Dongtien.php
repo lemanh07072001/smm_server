@@ -58,4 +58,45 @@ class Dongtien extends Model
     {
         return $this->belongsTo(BankAuto::class);
     }
+
+    /**
+     * Tạo giao dịch và cập nhật số dư user
+     *
+     * @param User $user
+     * @param int|float $amount - Số tiền (dương = cộng, âm = trừ)
+     * @param string $type - Loại giao dịch (TYPE_DEPOSIT, TYPE_CHARGE, TYPE_REFUND, TYPE_ADJUSTMENT)
+     * @param string $noidung - Nội dung giao dịch
+     * @param array $options - Các tùy chọn bổ sung [payment_method, payment_ref, order_id, bank_auto_id, datas, thoigian]
+     * @return self
+     */
+    public static function createTransaction(
+        User $user,
+        int|float $amount,
+        string $type,
+        string $noidung,
+        array $options = []
+    ): self {
+        $balanceBefore = (int) $user->balance;
+        $balanceAfter = $balanceBefore + $amount;
+
+        $dongtien = self::create([
+            'balance_before'  => $balanceBefore,
+            'amount'          => $amount,
+            'balance_after'   => $balanceAfter,
+            'thoigian'        => $options['thoigian'] ?? now(),
+            'noidung'         => $noidung,
+            'user_id'         => $user->id,
+            'type'            => $type,
+            'payment_method'  => $options['payment_method'] ?? null,
+            'payment_ref'     => $options['payment_ref'] ?? null,
+            'order_id'        => $options['order_id'] ?? null,
+            'bank_auto_id'    => $options['bank_auto_id'] ?? null,
+            'datas'           => $options['datas'] ?? null,
+        ]);
+
+        $user->balance = $balanceAfter;
+        $user->save();
+
+        return $dongtien;
+    }
 }

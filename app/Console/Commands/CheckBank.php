@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use Carbon\Carbon;
 use App\Models\User;
 use App\Models\BankAuto;
 use App\Models\Dongtien;
@@ -12,6 +11,7 @@ use App\Helpers\TelegramHelper;
 use App\Models\CodeTransaction;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Redis;
 
 class CheckBank extends Command
 {
@@ -35,207 +35,282 @@ class CheckBank extends Command
     public function handle()
     {
         $this->info('Start check bank: ' . date('Y-m-d H:i:s'));
-        // $url = 'http://namdubaiz.xyz/api1.php?user=0975771679&pass=GetAPI@1234';
+
+        // 1. Fetch transactions từ API
         $url = 'https://bank.minsoftware.xyz/banking/api.php/SelectBanking?limit=50&taikhoandangnhap=0388251144';
         $curl = new CurlHelper();
         $body = $curl->curl(['url' => $url]);
         $datas = @json_decode($body, true);
 
-        $keys = RedisHelper::getAllKeys(RedisHelper::REDIS_CODE_TRANSACTIONS);
+        $transactions = $datas['transactions'] ?? [];
+        if (empty($transactions)) {
+            $this->info('Không có giao dịch mới từ API');
+            return;
+        }
 
-        foreach ($keys as $key) {
-            $data = RedisHelper::get($key, RedisHelper::REDIS_CODE_TRANSACTIONS);
-            $data = json_decode($data, true);
+        // 2. Lấy tất cả Redis data một lần bằng MGET (tối ưu)
+        $redisData = $this->getAllRedisTransactions();
+        $this->info("Tìm thấy " . count($redisData) . " mã giao dịch trong Redis");
 
-            // Bỏ qua nếu data null hoặc không có transaction_code
-            if (empty($data) || !isset($data['transaction_code'])) {
-                $this->warn("⚠️  Bỏ qua key không hợp lệ: {$key}");
+        // 3. Tạo map: transaction_code => redis data để lookup nhanh O(1)
+        $codeMap = [];
+        foreach ($redisData as $item) {
+            if (!empty($item['transaction_code'])) {
+                $codeMap[strtoupper($item['transaction_code'])] = $item;
+            }
+        }
+
+        // 4. Lấy danh sách Reference đã xử lý để check trùng (batch query)
+        $allReferences = array_column($transactions, 'Reference');
+        $existingRefs = BankAuto::whereIn('tid', $allReferences)->pluck('tid')->toArray();
+        $existingRefsMap = array_flip($existingRefs);
+
+        // 5. Loop qua transactions
+        $processedCodes = [];
+
+        foreach ($transactions as $transaction) {
+            $Reference = $transaction['Reference'] ?? null;
+            $description = $transaction['Description'] ?? '';
+
+            if (!$Reference) {
                 continue;
             }
 
-            $codeData = $data['transaction_code'];
+            // Skip nếu đã xử lý
+            if (isset($existingRefsMap[$Reference])) {
+                continue;
+            }
 
-            if (isset($datas['transactions']) && $datas['transactions']) {
-                $filtered = array_filter($datas['transactions'], function ($item) use ($codeData) {
-                    // Tìm transaction có Description chứa transaction_code từ Redis
-                    if (!isset($item['Description'])) {
-                        return false;
-                    }
-                    // Tìm kiếm không phân biệt hoa thường
-                    return stripos($item['Description'], $codeData) !== false;
-                });
+            $matchedCode = null;
+            $userId = null;
 
+            // Nếu có Redis data, tìm match
+            if (!empty($codeMap)) {
+                $matchedCode = $this->findMatchingCode($description, $codeMap);
 
-                $filtered = array_values($filtered);
-
-
-                       
-                foreach ($filtered as $transaction) {
-                    $userId = null;
-
-                    $Reference = $transaction['Reference'];
-
-                    $lichsu = BankAuto::where('tid', $Reference)->first();
-
-
-                    if (!$lichsu) {
-                        $description = $transaction['Description'];
-
-                        // Xác định partner dựa trên $codeData
-                        $partner = 'smm'; // Mặc định
-
-
-                        // Tách chuỗi theo format: 152 + YYYYMMDD (8 số) + random string + user_id
-                        // Ví dụ: 15220251203bfv0541
-                        // - 152: prefix mặc định
-                        // - 20251203: năm tháng ngày (YYYYMMDD)
-                        // - bfv054: random string (bắt đầu bằng chữ, có thể có số)
-                        // - 1: user_id (số cuối cùng)
-                        $dateStr = null;
-                        $randomStr = null;
-
-                        // Tìm và cắt phần chứa $codeData trong description
-                        // Ví dụ description: "5337ibt1kjhs7ese.15220251203bfv0541 ft25337367548210..."
-                        // Cần cắt lấy: "15220251203bfv0541" (phần chứa $codeData)
-                        $textToParse = null;
-
-                        // Tìm tất cả các pattern 152\d{8}.{6}\d+ trong description
-                        if (preg_match_all('/SMM\d{8}.{6}\d+/', $description, $allMatches)) {
-                            // Tìm pattern nào chứa $codeData
-                            foreach ($allMatches[0] as $match) {
-                                if (stripos($match, $codeData) !== false) {
-                                    $textToParse = $match;
-                                    break;
-                                }
-                            }
-                        }
-
-                        // Nếu không tìm thấy trong description, dùng $codeData trực tiếp
-                        if (empty($textToParse)) {
-                            $textToParse = $codeData;
-                        }
-
-                        // Tách chuỗi: 152 + YYYYMMDD (8 số) + random string (6 ký tự) + user_id (số cuối)
-                        // Pattern: 152 + 8 số (date) + 6 ký tự (random) + số cuối (user_id)
-                        if (preg_match('/SMM(\d{8})(.{6})(\d+)/', $textToParse, $matches)) {
-                            $dateStr = $matches[1]; // YYYYMMDD: 20251203
-                            $randomStr = $matches[2]; // Random string (6 ký tự): bfv054
-                            $userId = $matches[3]; // User ID (số cuối): 1
-                        }
-
-
-                        // Log để debug
-                        if (isset($userId)) {
-                            $this->info("📅 Date: {$dateStr}, 🎲 Random: {$randomStr}, 👤 User ID: {$userId}");
-                        }
-
-                        $amout = (int)($transaction['CD'] . filter_var($transaction['Amount'], FILTER_SANITIZE_NUMBER_INT));
-
-
-                        // Partner type
-                        $partnerType = $partner;
-
-                        $bankauto = [
-                            'tid'         => $Reference,
-                            'description' => $description,
-                            'date'        => $transaction['TransactionDate'],
-                            'data'        => json_encode($transaction),
-                            'amount'      => $amout,
-                            'type'        => 'bank'
-                        ];
-
-                        $bank_auto =   BankAuto::create($bankauto);
-
-                        DB::beginTransaction();
-
-
-                        if ($userId) {
-                            $bankauto['user_id'] = $userId;
-
-                            if ($bankauto['amount'] > 0) {
-                                $usernaptien = User::find($userId);
-
-
-
-                                if ($usernaptien) {
-                                    $str_date = substr($transaction['TransactionDate'], 6, 4) . '-' . substr($transaction['TransactionDate'], 3, 2) . '-' . substr($transaction['TransactionDate'], 0, 2) . ' ' . substr($transaction['PCTime'], 0, 2) . ':' . substr($transaction['PCTime'], 2, 2) . ':' . substr($transaction['PCTime'], 4, 2);
-                                    //$str_date = substr($transaction['TransactionDate'], 6, 4).'-'.substr($transaction['TransactionDate'], 3, 2).'-'.substr($transaction['TransactionDate'], 0, 2).' '.'00:00:00';
-
-
-                                    $dongtien = [
-                                        'balance_before'  => (int)$usernaptien['balance'],
-                                        'amount'          => $amout,
-                                        'balance_after'   => (int)$usernaptien['balance'] + $amout,
-                                        'thoigian'        => date('Y-m-d H:i:s', strtotime($str_date)),
-                                        'noidung'         => 'Nạp tiền thành công.',
-                                        'user_id'         => $userId,
-                                        'type'            => Dongtien::TYPE_DEPOSIT,
-                                        'payment_method'  => 'bank',
-                                        'payment_ref'     => $Reference,
-                                        'datas'           => json_encode($bankauto),
-                                        'bank_auto_id'    => $bank_auto->id,
-                                    ];
-
-
-                                    Dongtien::create($dongtien);
-                                    $usernaptien->balance      = $usernaptien['balance'] + $amout;
-                                    // $usernaptien->sotiennap = $usernaptien['sotiennap'] + $amout;
-                                    $usernaptien->save();
-
-                                    // Định dạng số tiền
-                                    $formattedAmount = number_format($amout, 0, ',', '.') . ' VND';
-
-                                    // Thời gian hiện tại (giờ VN)
-                                    $time = Carbon::now('Asia/Ho_Chi_Minh')->format('d/m/Y H:i:s');
-
-                                    // Thêm emoji cho đẹp
-                                    $message = "💰 Thông báo Nạp tiền\n"
-                                        . "👤 Tài khoản: {$usernaptien->name}\n"
-                                        . "💵 Số tiền: {$formattedAmount}\n"
-                                        . "⏰ Thời gian: {$time}";
-
-                                    // Gửi với parse_mode Markdown để in đậm
-                                    // TelegramHelper::sendNotifyNapTienSystem($message, 'Thông báo nhận tiền', null);
-                                }
-                            };
-                        }
-
-                        DB::commit();
-                        $this->info('them giao dich' . $Reference);
-
-                        // Xóa mã giao dịch trong Redis và Database sau khi xử lý thành công
-                        try {
-                            // Xóa trong Database (code_transactions) trước
-                            $deletedFromDb = false;
-
-                            // Nếu không xóa được theo ID, thử xóa theo transaction_code
-                            if (!$deletedFromDb && isset($data['transaction_code'])) {
-                                $codeTransaction = CodeTransaction::where('transaction_code', $data['transaction_code'])->first();
-                                if ($codeTransaction) {
-                                    $codeTransaction->delete();
-                                    $deletedFromDb = true;
-                                    $this->info("✅ Đã xóa mã giao dịch trong Database (Code: {$data['transaction_code']})");
-                                }
-                            }
-
-                            if (!$deletedFromDb) {
-                                $this->warn("⚠️  Không tìm thấy CodeTransaction để xóa (ID: " . ($data['id'] ?? 'N/A') . ", Code: " . ($data['transaction_code'] ?? 'N/A') . ")");
-                            }
-
-                            // Xóa trong Redis
-                            RedisHelper::del($key, RedisHelper::REDIS_CODE_TRANSACTIONS);
-                            $this->info("✅ Đã xóa mã giao dịch trong Redis: {$key}");
-                        } catch (\Exception $e) {
-                            $this->warn("⚠️  Lỗi khi xóa mã giao dịch: " . $e->getMessage());
-                            logger()->warning('Failed to delete code transaction', [
-                                'key' => $key,
-                                'data' => $data,
-                                'error' => $e->getMessage()
-                            ]);
-                        }
-                    }
+                if ($matchedCode) {
+                    $redisItem = $codeMap[$matchedCode];
+                    $codeData = $redisItem['transaction_code'];
+                    $userId = $this->parseUserId($description, $codeData);
+                    $this->info("Match Redis: {$codeData} -> Reference: {$Reference}");
+                    $processedCodes[] = $matchedCode;
                 }
             }
+
+            // Nếu không match Redis, parse trực tiếp từ description
+            if (!$matchedCode) {
+            
+                $userId = $this->parseUserIdFromDescription($description);
+                if ($userId) {
+                    $this->info("Parse từ API: User ID {$userId} -> Reference: {$Reference}");
+                } else {
+                    continue;
+                }
+            }
+
+            // Xử lý giao dịch
+            $this->processTransaction($transaction, $userId);
+        }
+
+        // 6. Xóa các mã đã xử lý khỏi Redis và DB
+        $this->cleanupProcessedCodes($processedCodes, $codeMap);
+
+        $this->info('End check bank: ' . date('Y-m-d H:i:s'));
+    }
+
+    /**
+     * Lấy tất cả transactions từ Redis bằng MGET (tối ưu)
+     */
+    private function getAllRedisTransactions(): array
+    {
+        $redis = Redis::connection(RedisHelper::REDIS_CODE_TRANSACTIONS);
+        $keys = $redis->keys('*');
+
+        if (empty($keys)) {
+            return [];
+        }
+
+        // Dùng MGET để lấy tất cả values một lần
+        $values = $redis->mget($keys);
+
+        $result = [];
+        foreach ($keys as $index => $key) {
+            $value = $values[$index] ?? null;
+            if ($value) {
+                $data = json_decode($value, true);
+                if ($data && !empty($data['transaction_code'])) {
+                    $data['_redis_key'] = $key;
+                    $result[] = $data;
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Tìm transaction_code match trong description
+     */
+    private function findMatchingCode(string $description, array $codeMap): ?string
+    {
+        $descUpper = strtoupper($description);
+
+        foreach (array_keys($codeMap) as $code) {
+            if (strpos($descUpper, $code) !== false) {
+                return $code;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Parse user ID từ description khi có mã Redis
+     */
+    private function parseUserId(string $description, string $codeData): ?int
+    {
+        $textToParse = null;
+
+        // Tìm pattern SMM + date + random + user_id
+        if (preg_match_all('/smm\d{8}.{6}\d+/', $description, $allMatches)) {
+            foreach ($allMatches[0] as $match) {
+                if (stripos($match, $codeData) !== false) {
+                    $textToParse = $match;
+                    break;
+                }
+            }
+        }
+
+        if (empty($textToParse)) {
+            $textToParse = $codeData;
+        }
+
+        if (preg_match('/smm(\d{8})(.{6})(\d+)/', $textToParse, $matches)) {
+            $dateStr = $matches[1];
+            $randomStr = $matches[2];
+            $userId = (int) $matches[3];
+
+            $this->info("Date: {$dateStr}, Random: {$randomStr}, User ID: {$userId}");
+            return $userId;
+        }
+
+        return null;
+    }
+
+    /**
+     * Parse user ID trực tiếp từ description (khi không có Redis)
+     * Pattern: SMM + YYYYMMDD (8 số) + random (6 ký tự) + user_id
+     */
+    private function parseUserIdFromDescription(string $description): ?int
+    {
+        
+        // Tìm pattern SMM + date + random + user_id trong description
+        if (preg_match('/smm(\d{8})(.{6})(\d+)/', $description, $matches)) {
+            $dateStr = $matches[1];
+            $randomStr = $matches[2];
+            $userId = (int) $matches[3];
+
+            $this->info("Date: {$dateStr}, Random: {$randomStr}, User ID: {$userId}");
+            return $userId;
+        }
+
+        return null;
+    }
+
+    /**
+     * Xử lý một giao dịch (chỉ gọi khi đã match với Redis)
+     */
+    private function processTransaction(array $transaction, ?int $userId): void
+    {
+        $Reference = $transaction['Reference'];
+        $description = $transaction['Description'] ?? '';
+        $amount = (int)($transaction['CD'] . filter_var($transaction['Amount'], FILTER_SANITIZE_NUMBER_INT));
+
+        $bankauto = [
+            'tid'         => $Reference,
+            'description' => $description,
+            'date'        => $transaction['TransactionDate'],
+            'data'        => json_encode($transaction),
+            'amount'      => $amount,
+            'type'        => 'bank'
+        ];
+
+        DB::beginTransaction();
+
+        try {
+            $bank_auto = BankAuto::create($bankauto);
+
+            // Nạp tiền nếu có userId và amount > 0
+            if ($userId && $amount > 0) {
+                $bankauto['user_id'] = $userId;
+                $user = User::find($userId);
+
+                if ($user) {
+                    $str_date = substr($transaction['TransactionDate'], 6, 4) . '-'
+                        . substr($transaction['TransactionDate'], 3, 2) . '-'
+                        . substr($transaction['TransactionDate'], 0, 2) . ' '
+                        . substr($transaction['PCTime'], 0, 2) . ':'
+                        . substr($transaction['PCTime'], 2, 2) . ':'
+                        . substr($transaction['PCTime'], 4, 2);
+
+                    Dongtien::createTransaction($user, $amount, Dongtien::TYPE_DEPOSIT, 'Nạp tiền thành công.', [
+                        'thoigian'       => date('Y-m-d H:i:s', strtotime($str_date)),
+                        'payment_method' => 'bank',
+                        'payment_ref'    => $Reference,
+                        'datas'          => json_encode($bankauto),
+                        'bank_auto_id'   => $bank_auto->id,
+                    ]);
+
+                    $this->info("Nạp tiền thành công cho user {$userId}: " . number_format($amount) . " VND");
+                }
+            }
+
+            DB::commit();
+            $this->info("Thêm giao dịch: {$Reference}");
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            $this->error("Lỗi xử lý giao dịch {$Reference}: " . $e->getMessage());
+            logger()->error('CheckBank transaction error', [
+                'reference' => $Reference,
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Xóa các mã đã xử lý khỏi Redis và Database
+     */
+    private function cleanupProcessedCodes(array $processedCodes, array $codeMap): void
+    {
+        if (empty($processedCodes)) {
+            return;
+        }
+
+        $redis = Redis::connection(RedisHelper::REDIS_CODE_TRANSACTIONS);
+
+        // Lấy tất cả transaction_code cần xóa
+        $codesToDelete = [];
+        $keysToDelete = [];
+
+        foreach ($processedCodes as $code) {
+            if (isset($codeMap[$code])) {
+                $item = $codeMap[$code];
+                $codesToDelete[] = $item['transaction_code'];
+                $keysToDelete[] = $item['_redis_key'];
+            }
+        }
+
+        // Xóa trong Database bằng batch delete
+        if (!empty($codesToDelete)) {
+            $deleted = CodeTransaction::whereIn('transaction_code', $codesToDelete)->delete();
+            $this->info("Đã xóa {$deleted} mã giao dịch trong Database");
+        }
+
+        // Xóa trong Redis bằng DEL nhiều keys
+        if (!empty($keysToDelete)) {
+            $redis->del(...$keysToDelete);
+            $this->info("Đã xóa " . count($keysToDelete) . " keys trong Redis");
         }
     }
 }
