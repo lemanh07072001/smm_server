@@ -88,6 +88,7 @@ class OrderController extends Controller
     {
         $search = $request->input('search');
         $status = $request->input('status');
+        $perPage = $request->input('per_page', 10);
 
         // Query orders của user
         $query = Order::with(['service'])
@@ -109,14 +110,18 @@ class OrderController extends Controller
             });
         }
 
-        // Lấy tất cả orders của user (chỉ load service, không load user và providerService)
-        $orders = $query->orderBy('created_at', 'desc')->get();
+        // Phân trang
+        $page = $request->input('page', 1);
+        $total = $query->count();
+        $totalPages = (int) ceil($total / $perPage);
 
-        // Thống kê số lượng từng trạng thái bằng groupBy (hiệu quả hơn)
-        $statusCountsQuery = Order::where('user_id', $userId);
+        $orders = $query->orderBy('created_at', 'desc')
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage)
+            ->get();
 
-
-        $statusCountsRaw = $statusCountsQuery
+        // Thống kê số lượng từng trạng thái
+        $statusCountsRaw = Order::where('user_id', $userId)
             ->selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
             ->pluck('count', 'status')
@@ -134,15 +139,13 @@ class OrderController extends Controller
             'failed' => $statusCountsRaw['failed'] ?? 0,
         ];
 
-        // Tính tổng số đơn hàng
-        $totalOrders = $orders->count();
-
         return response()->json([
-            'data' => [
-                'orders' => $orders,
-                'total' => $totalOrders,
-                'status_counts' => $statusCounts,
-            ],
+            'data' => $orders,
+            'total' => $total,
+            'page' => (int) $page,
+            'limit' => (int) $perPage,
+            'totalPages' => $totalPages,
+            'status_counts' => $statusCounts,
         ]);
     }
 

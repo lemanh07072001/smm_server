@@ -59,4 +59,13 @@ class SmmPanelProvider extends BaseProvider
         // Nếu có order ID thì thành công
         return isset($data['order']) || isset($data['id']);
     }
+
+    protected function buildStatusBody(string|array $orderIds): array
+    {
+        return [
+            'key' => $this->provider->api_key,
+            'action' => 'status',
+            'order' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
+        ];
+    }
 }

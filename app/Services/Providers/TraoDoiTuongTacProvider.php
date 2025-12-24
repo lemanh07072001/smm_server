@@ -33,4 +33,60 @@ class TraoDoiTuongTacProvider extends BaseProvider
     {
         return ($response['success'] ?? false) && !isset($response['data']['error']);
     }
+
+    protected function buildStatusBody(string|array $orderIds): array
+    {
+        return [
+            'key' => $this->provider->api_key,
+            'action' => 'statuss',
+            'order' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
+        ];
+    }
+
+    /**
+     * Parse status response từ Trao Đổi Tương Tác
+     * Response format:
+     * {
+     *     "13473430": {
+     *         "charge": 1,
+     *         "start_count": -1,
+     *         "status": "Canceled",
+     *         "remains": 1,
+     *         "currency": "VND"
+     *     }
+     * }
+     */
+    public function parseStatusResponse(array $response): array
+    {
+        $data = $response['data'] ?? [];
+        $result = [];
+
+        foreach ($data as $orderId => $orderData) {
+            $result[$orderId] = [
+                'provider_order_id' => $orderId,
+                'status' => $orderData['status'] ?? null,
+                'start_count' => $orderData['start_count'] ?? 0,
+                'remains' => $orderData['remains'] ?? 0,
+                'charge' => $orderData['charge'] ?? 0,
+                'currency' => $orderData['currency'] ?? 'VND',
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Map status từ provider sang status của hệ thống
+     */
+    public function mapProviderStatus(string $providerStatus): string
+    {
+        return match (strtolower($providerStatus)) {
+            'pending' => 'pending',
+            'in progress', 'inprogress', 'processing' => 'processing',
+            'completed', 'complete' => 'completed',
+            'canceled', 'cancelled', 'refunded' => 'canceled',
+            'partial' => 'partial',
+            default => 'unknown',
+        };
+    }
 }

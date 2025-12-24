@@ -114,9 +114,9 @@ class CategoryGroupController extends Controller
             ->orderBy('name', 'asc')
             ->with(['category:id,name', 'services' => function ($q) {
                 $q->where('is_active', 1)
-                    ->with(['category'])
                     ->orderBy('sort_order', 'asc')
-                    ->orderBy('name', 'asc');
+                    ->orderBy('name', 'asc')
+                    ->with('providerService');
             }]);
 
         if ($request->has('category_id')) {

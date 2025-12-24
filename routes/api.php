@@ -51,7 +51,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/category-groups', [CategoryGroupController::class, 'index']);
     Route::post('/category-groups', [CategoryGroupController::class, 'store']);
     Route::post('/category-groups/delete-multiple', [CategoryGroupController::class, 'destroyMultiple']);
-
     Route::get('/category-groups/{id}', [CategoryGroupController::class, 'show']);
     Route::post('/category-groups/{id}', [CategoryGroupController::class, 'update']);
     Route::delete('/category-groups/{id}', [CategoryGroupController::class, 'destroy']);
@@ -79,7 +78,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/services', [ServiceController::class, 'store']);
     Route::post('/services/delete-multiple', [ServiceController::class, 'destroyMultiple']);
     Route::get('/services/platforms', [ServiceController::class, 'platforms']);
-
     Route::get('/services/{id}', [ServiceController::class, 'show']);
     Route::post('/services/{id}', [ServiceController::class, 'update']);
     Route::delete('/services/{id}', [ServiceController::class, 'destroy']);

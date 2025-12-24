@@ -11,6 +11,21 @@ class Service extends Model
 {
     use HasFactory;
 
+    // Priority types
+    public const PRIORITY_VERY_SLOW = 0;
+    public const PRIORITY_SLOW = 1;
+    public const PRIORITY_NORMAL = 2;
+    public const PRIORITY_FAST = 3;
+    public const PRIORITY_VERY_FAST = 4;
+
+    public const PRIORITY_TYPES = [
+        self::PRIORITY_VERY_SLOW => 'Rất chậm',
+        self::PRIORITY_SLOW      => 'Chậm',
+        self::PRIORITY_NORMAL    => 'Bình thường',
+        self::PRIORITY_FAST      => 'Nhanh',
+        self::PRIORITY_VERY_FAST => 'Rất nhanh',
+    ];
+
     public const PLATFORM = [
         '1' => [
             'CODE'  => '1',
@@ -130,5 +145,13 @@ class Service extends Model
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    /**
+     * Lấy tên priority
+     */
+    public function getPriorityTextAttribute(): string
+    {
+        return self::PRIORITY_TYPES[$this->priority] ?? 'Không xác định';
     }
 }

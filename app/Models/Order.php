@@ -134,5 +134,23 @@ class Order extends Model
     {
         return $this->status === self::STATUS_FAILED;
     }
+
+    /**
+     * Map provider status to system status
+     */
+    public static function mapProviderStatus(string $providerStatus): string
+    {
+        return match (strtolower($providerStatus)) {
+            'pending'                               => self::STATUS_PENDING,
+            'processing', 'in progress', 'inprogress' => self::STATUS_PROCESSING,
+            'in_progress'                           => self::STATUS_IN_PROGRESS,
+            'completed', 'complete', 'success'      => self::STATUS_COMPLETED,
+            'partial'                               => self::STATUS_PARTIAL,
+            'canceled', 'cancelled', 'cancel'       => self::STATUS_CANCELED,
+            'refunded', 'refund'                    => self::STATUS_REFUNDED,
+            'failed', 'fail', 'error'               => self::STATUS_FAILED,
+            default                                 => self::STATUS_PENDING,
+        };
+    }
 }
 

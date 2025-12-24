@@ -9,6 +9,7 @@ class RedisHelper
   const REDIS_WEB = 'web_redis';
   const REDIS_ORDER_WEB = 'order_web_redis';
   const REDIS_CODE_TRANSACTIONS = 'code_transactions_redis';
+  const REDIS_ACTIVITY_LOGS = 'activity_logs_redis';
 
   public static function getAllKey()
   {

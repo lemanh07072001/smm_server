@@ -41,4 +41,19 @@ interface ProviderInterface
      * Check if response is successful
      */
     public function isSuccessResponse(array $response): bool;
+
+    /**
+     * Get order status from provider
+     */
+    public function getOrderStatus(string|array $orderIds): array;
+
+    /**
+     * Parse status response from provider
+     */
+    public function parseStatusResponse(array $response): array;
+
+    /**
+     * Map provider status to system status
+     */
+    public function mapProviderStatus(string $providerStatus): string;
 }
