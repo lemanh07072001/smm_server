@@ -157,7 +157,6 @@ class PlaceOrder extends Command
             $logger->statusCheck();
             $statusResponse = $providerService->getOrderStatus($providerOrderId);
 
-            logger($statusResponse);
             $updateData = [
                 'provider_order_id' => $providerOrderId,
                 'status'            => Order::STATUS_PROCESSING,
