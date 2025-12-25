@@ -17,6 +17,8 @@ class CheckOrderStatus extends Command
     {
         $orders = Order::with(['service.providerService.provider'])
             ->whereIn('status', [
+                Order::STATUS_PENDING,
+                Order::STATUS_PROCESSING,
                 Order::STATUS_IN_PROGRESS,
             ])
             ->whereNotNull('provider_order_id')
