@@ -11,8 +11,18 @@ class Order extends Model
     use HasFactory;
 
     const KEY_ID_REDIS_ORDER = 'key_id_redis_order';
+
     /**
      * Status constants
+     *
+     * PENDING      - Đơn hàng mới tạo, chờ đẩy lên provider
+     * PROCESSING   - Đã đẩy lên provider, provider đang xử lý
+     * IN_PROGRESS  - Provider đang thực hiện (đang chạy view/like/follow...)
+     * COMPLETED    - Hoàn thành, đã đủ số lượng yêu cầu
+     * PARTIAL      - Hoàn thành một phần, không đủ số lượng (sẽ refund phần còn lại)
+     * CANCELED     - Đã hủy bởi user hoặc admin
+     * REFUNDED     - Đã hoàn tiền toàn bộ
+     * FAILED       - Thất bại, lỗi từ provider hoặc hệ thống
      */
     public const STATUS_PENDING = 'pending';
     public const STATUS_PROCESSING = 'processing';

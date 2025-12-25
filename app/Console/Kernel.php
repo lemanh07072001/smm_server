@@ -3,6 +3,7 @@
 namespace App\Console;
 
 use App\Console\Commands\CheckBank;
+use App\Console\Commands\CheckOrderStatus;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
@@ -10,6 +11,7 @@ class Kernel extends ConsoleKernel
 {
     protected $commands = [
         CheckBank::class,
+        CheckOrderStatus::class,
     ];
 
     /**
@@ -23,6 +25,12 @@ class Kernel extends ConsoleKernel
             ->everyMinute()
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('checkbank.txt'));
+
+        $schedule->command('order:check-status')
+            ->runInBackground()
+            ->everyFiveMinutes()
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/order-status.log'));
     }
 
     /**
