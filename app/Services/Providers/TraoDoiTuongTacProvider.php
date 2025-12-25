@@ -38,7 +38,7 @@ class TraoDoiTuongTacProvider extends BaseProvider
     {
         return [
             'key' => $this->provider->api_key,
-            'action' => 'statuss',
+            'action' => 'status',
             'order' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
         ];
     }
