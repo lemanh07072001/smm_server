@@ -91,7 +91,7 @@ class OrderController extends Controller
         $perPage = $request->input('per_page', 10);
 
         // Query orders của user
-        $query = Order::with(['service'])
+        $query = Order::with(['service','user'])
             ->where('user_id', $userId);
 
         // Filter theo status (nếu status là "all" thì lấy tất cả)

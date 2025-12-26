@@ -18,7 +18,7 @@ class CategoryGroupController extends Controller
         $search = $request->input('search');
         $status = $request->input('is_active');
 
-        $query = CategoryGroup::with('category:id,name')
+        $query = CategoryGroup::with(['category:id,name','services'])
             ->orderBy('sort_order', 'asc')
             ->orderBy('created_at', 'desc');
 

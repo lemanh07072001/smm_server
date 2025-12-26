@@ -9,6 +9,7 @@ use App\Models\CategoryGroup;
 use App\Models\Service;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class ServiceController extends Controller
 {
@@ -142,6 +143,20 @@ class ServiceController extends Controller
 
         return response()->json([
             'data' => $categoryGroups,
+        ]);
+    }
+
+    public function formTypes(): JsonResponse
+    {
+        $data = Cache::remember('service_form_types', 3600, function () {
+            return [
+                'feel_form' => Service::FEEL_FORM,
+                'comment_form' => Service::COMMENT_FORM,
+            ];
+        });
+
+        return response()->json([
+            'data' => $data,
         ]);
     }
 }

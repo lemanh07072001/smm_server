@@ -97,6 +97,14 @@ class Service extends Model
         ],
     ];
 
+    public const FEEL_FORM = [
+        'fb_feel'
+    ];
+
+    public const COMMENT_FORM = [
+        'fb_comment'
+    ];
+
     protected $fillable = [
         'category_id',
         'category_group_id',

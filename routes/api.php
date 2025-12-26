@@ -29,6 +29,7 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::get('/categories/all', [CategoryController::class, 'all']);
 Route::get('/category-groups/all', [CategoryGroupController::class, 'all']);
 Route::get('/services/all', [ServiceController::class, 'all']);
+Route::get('/services/form-types', [ServiceController::class, 'formTypes']);
 Route::post('/get-providers', [ProviderController::class, 'getProvider']);
 
 // Protected routes
