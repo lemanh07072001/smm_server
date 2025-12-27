@@ -12,24 +12,16 @@ class CategoryGroup extends Model
     use HasFactory;
 
     protected $fillable = [
-        'category_id',
         'name',
-        'slug',
         'icon',
         'sort_order',
         'is_active',
     ];
 
     protected $casts = [
-        'category_id' => 'integer',
         'sort_order' => 'integer',
         'is_active' => 'boolean',
     ];
-
-    public function category(): BelongsTo
-    {
-        return $this->belongsTo(Category::class);
-    }
 
     public function services(): HasMany
     {

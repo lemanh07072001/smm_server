@@ -41,6 +41,8 @@ class UpdateProviderServiceRequest extends FormRequest
             'min_quantity' => ['required', 'integer', 'min:1'],
             'max_quantity' => ['required', 'integer', 'min:1'],
             'is_active' => ['required', 'boolean'],
+            'reaction_types' => ['nullable', 'array'],
+            'reaction_types.*' => ['string'],
         ];
     }
 

@@ -26,9 +26,7 @@ class UpdateCategoryGroupRequest extends FormRequest
         $id = $this->route('id');
 
         return [
-            'category_id' => ['nullable', 'integer', 'exists:categories,id'],
             'name' => ['sometimes', 'string', 'max:100'],
-            'slug' => ['sometimes', 'string', 'max:100', Rule::unique('category_groups', 'slug')->ignore($id)],
             'icon' => ['nullable', 'string', 'max:255'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
@@ -38,10 +36,7 @@ class UpdateCategoryGroupRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'category_id.exists' => 'Category không tồn tại.',
             'name.max' => 'Tên không được vượt quá 100 ký tự.',
-            'slug.max' => 'Slug không được vượt quá 100 ký tự.',
-            'slug.unique' => 'Slug đã tồn tại.',
             'is_active.boolean' => 'Trạng thái phải là true hoặc false.',
         ];
     }

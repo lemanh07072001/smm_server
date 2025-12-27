@@ -21,12 +21,14 @@ class ProviderService extends Model
         'max_quantity',
         'is_active',
         'last_synced_at',
+        'reaction_types',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'cost_rate' => 'decimal:2',
         'last_synced_at' => 'datetime',
+        'reaction_types' => 'array',
     ];
 
     public function provider(): BelongsTo

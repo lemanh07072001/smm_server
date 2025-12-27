@@ -57,6 +57,7 @@ class ProviderServiceController extends Controller
     {
         $data = $request->validated();
 
+
         $providerService = ProviderService::create($data);
         $providerService->load('provider');
 
@@ -79,6 +80,12 @@ class ProviderServiceController extends Controller
     {
         $providerService = ProviderService::findOrFail($id);
         $data = $request->validated();
+
+        logger($request->all());
+        // Nếu request có gửi reaction_types (kể cả null), thì set giá trị đó
+        if ($request->has('reaction_types')) {
+            $data['reaction_types'] = $request->input('reaction_types');
+        }
 
         $providerService->update($data);
         $providerService->load('provider');
