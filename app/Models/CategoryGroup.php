@@ -16,6 +16,9 @@ class CategoryGroup extends Model
         'icon',
         'sort_order',
         'is_active',
+        'group_id',
+        'category_id',
+        'description',
     ];
 
     protected $casts = [

@@ -106,7 +106,6 @@ class Service extends Model
     ];
 
     protected $fillable = [
-        'category_id',
         'category_group_id',
         'group_id',
         'provider_service_id',
@@ -119,10 +118,10 @@ class Service extends Model
         'priority',
         'is_active',
         'allow_multiple_reactions',
+        'reaction_types',
     ];
 
     protected $casts = [
-        'category_id' => 'integer',
         'category_group_id' => 'integer',
         'group_id' => 'string',
         'provider_service_id' => 'integer',
@@ -133,12 +132,8 @@ class Service extends Model
         'priority' => 'integer',
         'is_active' => 'boolean',
         'allow_multiple_reactions' => 'boolean',
+        'reaction_types' => 'array',
     ];
-
-    public function category(): BelongsTo
-    {
-        return $this->belongsTo(Category::class);
-    }
 
     public function categoryGroup(): BelongsTo
     {

@@ -18,7 +18,7 @@ class CategoryGroupController extends Controller
         $search = $request->input('search');
         $status = $request->input('is_active');
 
-        $query = CategoryGroup::with(['category:id,name','services'])
+        $query = CategoryGroup::with(['services'])
             ->orderBy('sort_order', 'asc')
             ->orderBy('created_at', 'desc');
 
@@ -53,6 +53,7 @@ class CategoryGroupController extends Controller
     {
         $data = $request->validated();
 
+
         $categoryGroup = CategoryGroup::create($data);
 
         return response()->json([
@@ -74,7 +75,7 @@ class CategoryGroupController extends Controller
     {
         $categoryGroup = CategoryGroup::findOrFail($id);
         $data = $request->validated();
-
+        logger($data);
         $categoryGroup->update($data);
 
         return response()->json([
@@ -112,16 +113,12 @@ class CategoryGroupController extends Controller
         $query = CategoryGroup::where('is_active', 1)
             ->orderBy('sort_order', 'asc')
             ->orderBy('name', 'asc')
-            ->with(['category:id,name', 'services' => function ($q) {
+            ->with(['services' => function ($q) {
                 $q->where('is_active', 1)
                     ->orderBy('sort_order', 'asc')
                     ->orderBy('name', 'asc')
                     ->with('providerService');
             }]);
-
-        if ($request->has('category_id')) {
-            $query->where('category_id', $request->input('category_id'));
-        }
 
         return response()->json([
             'data' => $query->get(),

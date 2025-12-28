@@ -19,10 +19,10 @@ class ServiceController extends Controller
         $page = $request->input('page', 1);
         $search = $request->input('search');
         $status = $request->input('is_active');
-        $categoryId = $request->input('category_id');
+        $categoryGroupId = $request->input('category_group_id');
         $providerServiceId = $request->input('provider_service_id');
 
-        $query = Service::with(['category', 'providerService'])
+        $query = Service::with(['categoryGroup', 'providerService'])
             ->orderBy('sort_order', 'asc')
             ->orderBy('created_at', 'desc');
 
@@ -37,8 +37,8 @@ class ServiceController extends Controller
             $query->where('is_active', $status === '1' || $status === 'true' ? 1 : 0);
         }
 
-        if ($categoryId !== null) {
-            $query->where('category_id', $categoryId);
+        if ($categoryGroupId !== null) {
+            $query->where('category_group_id', $categoryGroupId);
         }
 
         if ($providerServiceId !== null) {
@@ -66,7 +66,7 @@ class ServiceController extends Controller
         $data = $request->validated();
 
         $service = Service::create($data);
-        $service->load(['category', 'providerService']);
+        $service->load(['categoryGroup', 'providerService']);
 
         return response()->json([
             'message' => 'Tạo dịch vụ thành công.',
@@ -74,22 +74,22 @@ class ServiceController extends Controller
         ], 201);
     }
 
-    public function show(int $id): JsonResponse
+    public function show(string $id): JsonResponse
     {
-        $service = Service::with(['category', 'providerService'])->findOrFail($id);
+        $service = Service::with(['categoryGroup', 'providerService'])->findOrFail($id);
 
         return response()->json([
             'data' => $service,
         ]);
     }
 
-    public function update(UpdateServiceRequest $request, int $id): JsonResponse
+    public function update(UpdateServiceRequest $request, string $id): JsonResponse
     {
         $service = Service::findOrFail($id);
         $data = $request->validated();
 
         $service->update($data);
-        $service->load(['category', 'providerService']);
+        $service->load(['categoryGroup', 'providerService']);
 
         return response()->json([
             'message' => 'Cập nhật dịch vụ thành công.',
@@ -97,7 +97,7 @@ class ServiceController extends Controller
         ]);
     }
 
-    public function destroy(int $id): JsonResponse
+    public function destroy(string $id): JsonResponse
     {
         $service = Service::findOrFail($id);
         $service->delete();
@@ -135,7 +135,7 @@ class ServiceController extends Controller
             ->orderBy('name', 'asc')
             ->with(['services' => function ($query) {
                 $query->where('is_active', 1)
-                    ->with(['category', 'providerService'])
+                    ->with(['categoryGroup', 'providerService'])
                     ->orderBy('sort_order', 'asc')
                     ->orderBy('name', 'asc');
             }])

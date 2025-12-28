@@ -31,8 +31,7 @@ class UpdateServiceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'category_id' => ['sometimes', 'integer', 'exists:categories,id'],
-            'category_group_id' => ['nullable', 'integer', 'exists:category_groups,id'],
+            'category_group_id' => ['sometimes', 'integer', 'exists:category_groups,id'],
             'group_id' => ['nullable', 'string'],
             'provider_service_id' => ['sometimes', 'integer', 'exists:provider_services,id'],
             'name' => ['sometimes', 'string', 'max:255'],
@@ -44,6 +43,8 @@ class UpdateServiceRequest extends FormRequest
             'priority' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
             'allow_multiple_reactions' => ['nullable', 'boolean'],
+            'reaction_types' => ['nullable', 'array'],
+            'reaction_types.*' => ['string'],
         ];
     }
 
@@ -55,7 +56,7 @@ class UpdateServiceRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'category_id.exists' => 'Category không tồn tại.',
+            'category_group_id.exists' => 'Nhóm danh mục không tồn tại.',
             'provider_service_id.exists' => 'Provider service không tồn tại.',
             'name.max' => 'Tên không được vượt quá 255 ký tự.',
             'sell_rate.numeric' => 'Giá bán phải là số.',

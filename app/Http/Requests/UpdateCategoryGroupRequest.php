@@ -30,6 +30,9 @@ class UpdateCategoryGroupRequest extends FormRequest
             'icon' => ['nullable', 'string', 'max:255'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
+            'category_id' => ['nullable', 'integer', 'exists:categories,id'],
+            'group_id' => ['nullable', 'string', 'max:100'],
+            'description' => ['nullable', 'string'],
         ];
     }
 
