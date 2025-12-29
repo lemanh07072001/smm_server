@@ -161,7 +161,7 @@ class OrderController extends Controller
             'comments' => ['nullable', 'string'],
         ]);
 
-        // Convert newline thực thành \n literal cho provider API
+        // Convert newline thực thành literal \n để lưu DB và gửi API
         if (!empty($validated['comments'])) {
             $validated['comments'] = str_replace(["\r\n", "\r", "\n"], '\n', $validated['comments']);
         }

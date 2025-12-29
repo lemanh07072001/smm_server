@@ -22,7 +22,7 @@ class TraoDoiTuongTacProvider extends BaseProvider
             'quantity' => $validated['quantity'],
         ];
 
-        // Thêm comments nếu có
+        // Thêm comments nếu có (đã được convert thành literal \n từ OrderController)
         if (!empty($validated['comments'])) {
             $body['comments'] = $validated['comments'];
         }

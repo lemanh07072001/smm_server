@@ -33,7 +33,7 @@ abstract class BaseProvider implements ProviderInterface
         ]);
 
         try {
-            $response = Http::timeout(30)->post($url, $body);
+            $response = Http::timeout(30)->asForm()->post($url, $body);
 
             // Log raw response trước khi parse
             Log::info('Provider API Raw Response', [
