@@ -158,7 +158,13 @@ class OrderController extends Controller
             'link' => ['required', 'string', 'max:1000'],
             'quantity' => ['required', 'integer', 'min:1'],
             'reactions' => ['nullable', 'array'],
+            'comments' => ['nullable', 'string'],
         ]);
+
+        // Convert newline thực thành \n literal cho provider API
+        if (!empty($validated['comments'])) {
+            $validated['comments'] = str_replace(["\r\n", "\r", "\n"], '\n', $validated['comments']);
+        }
 
         // Lấy user từ authenticated request
         $user = $request->user();
@@ -223,6 +229,7 @@ class OrderController extends Controller
                 'provider_service_id' => $validated['provider_service_id'],
                 'link' => $validated['link'],
                 'quantity' => $quantity,
+                'comments' => $validated['comments'] ?? null,
                 'status' => Order::STATUS_PENDING,
                 'cost_rate' => $costRate,
                 'sell_rate' => $sellRate,

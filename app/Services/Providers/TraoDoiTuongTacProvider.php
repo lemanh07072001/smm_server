@@ -14,13 +14,20 @@ class TraoDoiTuongTacProvider extends BaseProvider
 
     public function buildAddOrderBody(Service $service, array $validated): array
     {
-        return [
+        $body = [
             'key' => $this->provider->api_key,
             'action' => 'add',
             'service' => $service->providerService->provider_service_code,
             'link' => $validated['link'],
             'quantity' => $validated['quantity'],
         ];
+
+        // Thêm comments nếu có
+        if (!empty($validated['comments'])) {
+            $body['comments'] = $validated['comments'];
+        }
+
+        return $body;
     }
 
     public function getOrderIdFromResponse(array $response): ?string

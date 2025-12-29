@@ -129,6 +129,11 @@ class PlaceOrder extends Command
                 'quantity' => $order->quantity,
             ];
 
+            // Thêm comments nếu có
+            if (!empty($order->comments)) {
+                $validated['comments'] = $order->comments;
+            }
+
             // Log request
             $startTime = microtime(true);
             $logger->providerRequest($providerService->buildApiUrl(), $providerService->buildAddOrderBody($service, $validated));

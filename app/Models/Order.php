@@ -45,6 +45,7 @@ class Order extends Model
         'provider_order_id',
         'link',
         'quantity',
+        'comments',
         'start_count',
         'remains',
         'status',
