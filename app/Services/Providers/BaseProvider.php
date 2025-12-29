@@ -30,7 +30,13 @@ abstract class BaseProvider implements ProviderInterface
             'provider'  => $this->provider->code,
             'url'       => $url,
             'body'      => $body,
+            'form_encoded' => http_build_query($body),
         ]);
+
+        // Debug: log comments trực tiếp để xem giá trị thực
+        if (isset($body['comments'])) {
+            Log::info('Comments debug: ' . $body['comments']);
+        }
 
         try {
             $response = Http::timeout(30)->asForm()->post($url, $body);
