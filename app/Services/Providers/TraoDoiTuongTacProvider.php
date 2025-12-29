@@ -22,11 +22,12 @@ class TraoDoiTuongTacProvider extends BaseProvider
             'quantity' => $validated['quantity'],
         ];
 
-        // Thêm comments nếu có (đã được convert thành literal \n từ OrderController)
+        // Thêm comments nếu có - convert literal \n thành newline thực cho API
         if (!empty($validated['comments'])) {
-            $body['comments'] = $validated['comments'];
+            $body['comments'] = str_replace('\n', "\n", $validated['comments']);
         }
 
+        logger(json_encode($body, JSON_UNESCAPED_UNICODE));
         return $body;
     }
 
