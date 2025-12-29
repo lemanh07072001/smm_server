@@ -9,6 +9,7 @@ use App\Helpers\CurlHelper;
 use App\Helpers\RedisHelper;
 use App\Helpers\TelegramHelper;
 use App\Models\CodeTransaction;
+use App\Events\TransactionSuccess;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
@@ -232,7 +233,8 @@ class CheckBank extends Command
             'date'        => $transaction['TransactionDate'],
             'data'        => json_encode($transaction),
             'amount'      => $amount,
-            'type'        => 'bank'
+            'type'        => 'bank',
+            'user_id'     => $userId,
         ];
 
         DB::beginTransaction();
@@ -242,7 +244,6 @@ class CheckBank extends Command
 
             // Nạp tiền nếu có userId và amount > 0
             if ($userId && $amount > 0) {
-                $bankauto['user_id'] = $userId;
                 $user = User::find($userId);
 
                 if ($user) {
@@ -262,6 +263,9 @@ class CheckBank extends Command
                     ]);
 
                     $this->info("Nạp tiền thành công cho user {$userId}: " . number_format($amount) . " VND");
+
+                    // Gửi thông báo qua WebSocket đến user
+                    broadcast(new TransactionSuccess($userId, $amount, $Reference));
                 }
             }
 

@@ -58,7 +58,6 @@ class TransactionSuccess implements ShouldBroadcast
             'user_id' => $this->userId,
             'amount' => $this->amount,
             'amount_formatted' => number_format($this->amount) . ' VND',
-            'reference' => $this->reference,
             'message' => $this->message,
             'timestamp' => now()->toIso8601String(),
         ];
