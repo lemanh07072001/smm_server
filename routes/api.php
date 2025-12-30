@@ -10,7 +10,6 @@ use App\Http\Controllers\Api\ProviderServiceController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -32,16 +31,6 @@ Route::get('/category-groups/all', [CategoryGroupController::class, 'all']);
 Route::get('/services/all', [ServiceController::class, 'all']);
 Route::get('/services/form-types', [ServiceController::class, 'formTypes']);
 Route::post('/get-providers', [ProviderController::class, 'getProvider']);
-
-// Broadcasting auth route
-Broadcast::routes(['middleware' => ['auth:sanctum']]);
-
-// Test broadcast (XÓA SAU KHI TEST XONG)
-Route::middleware('auth:sanctum')->post('/test-broadcast', function (Request $request) {
-    $user = $request->user();
-    broadcast(new \App\Events\TransactionSuccess($user->id, 50000, 'TEST_' . time()));
-    return response()->json(['message' => 'Broadcast sent to user ' . $user->id]);
-});
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
