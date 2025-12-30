@@ -9,6 +9,7 @@ use App\Models\Category;
 use App\Services\ImageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class CategoryController extends Controller
 {
@@ -64,6 +65,7 @@ class CategoryController extends Controller
         }
 
         $category = Category::create($data);
+        Cache::forget('categories_active');
 
         return response()->json([
             'message' => 'Tạo danh mục thành công.',
@@ -92,6 +94,7 @@ class CategoryController extends Controller
         }
 
         $category->update($data);
+        Cache::forget('categories_active');
 
         return response()->json([
             'message' => 'Cập nhật danh mục thành công.',
@@ -106,6 +109,7 @@ class CategoryController extends Controller
         $this->imageService->delete($category->image);
 
         $category->delete();
+        Cache::forget('categories_active');
 
         return response()->json([
             'message' => 'Xóa danh mục thành công.',
@@ -125,6 +129,7 @@ class CategoryController extends Controller
         }
 
         $count = Category::whereIn('id', $request->ids)->delete();
+        Cache::forget('categories_active');
 
         return response()->json([
             'message' => "Đã xóa {$count} danh mục thành công.",
@@ -133,10 +138,12 @@ class CategoryController extends Controller
 
     public function all(): JsonResponse
     {
-        $categories = Category::where('is_active', 1)
-            ->orderBy('sort_order', 'asc')
-            ->orderBy('name', 'asc')
-            ->get();
+        $categories = Cache::rememberForever('categories_active', function () {
+            return Category::where('is_active', 1)
+                ->orderBy('sort_order', 'asc')
+                ->orderBy('name', 'asc')
+                ->get();
+        });
 
         return response()->json([
             'data' => $categories,
