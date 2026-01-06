@@ -13,10 +13,10 @@ class Dongtien extends Model
     protected $table = 'dongtien';
 
     // Type constants
-    public const TYPE_DEPOSIT = 'deposit';
-    public const TYPE_CHARGE = 'charge';
-    public const TYPE_REFUND = 'refund';
-    public const TYPE_ADJUSTMENT = 'adjustment';
+    public const TYPE_DEPOSIT = 'deposit';       // Nạp tiền (cộng tiền)
+    public const TYPE_CHARGE = 'charge';         // Mua hàng (trừ tiền)
+    public const TYPE_REFUND = 'refund';         // Hoàn tiền (cộng tiền)
+    public const TYPE_ADJUSTMENT = 'adjustment'; // Điều chỉnh (cộng/trừ tùy is_credit)
 
     protected $fillable = [
         'balance_before',
@@ -60,13 +60,28 @@ class Dongtien extends Model
     }
 
     /**
+     * Các type làm tăng số dư (cộng tiền)
+     */
+    public const CREDIT_TYPES = [
+        self::TYPE_DEPOSIT,
+        self::TYPE_REFUND,
+    ];
+
+    /**
+     * Các type làm giảm số dư (trừ tiền)
+     */
+    public const DEBIT_TYPES = [
+        self::TYPE_CHARGE,
+    ];
+
+    /**
      * Tạo giao dịch và cập nhật số dư user
      *
      * @param User $user
-     * @param int|float $amount - Số tiền (dương = cộng, âm = trừ)
+     * @param int|float $amount - Số tiền (luôn dương)
      * @param string $type - Loại giao dịch (TYPE_DEPOSIT, TYPE_CHARGE, TYPE_REFUND, TYPE_ADJUSTMENT)
      * @param string $noidung - Nội dung giao dịch
-     * @param array $options - Các tùy chọn bổ sung [payment_method, payment_ref, order_id, bank_auto_id, datas, thoigian]
+     * @param array $options - Các tùy chọn bổ sung [payment_method, payment_ref, order_id, bank_auto_id, datas, thoigian, is_credit]
      * @return self
      */
     public static function createTransaction(
@@ -76,8 +91,22 @@ class Dongtien extends Model
         string $noidung,
         array $options = []
     ): self {
-        $balanceBefore = (int) $user->balance;
-        $balanceAfter = $balanceBefore + $amount;
+        $amount = abs($amount); // Đảm bảo amount luôn dương
+        $balanceBefore = (float) $user->balance;
+
+        // Xác định cộng hay trừ dựa trên type
+        // - CREDIT_TYPES (deposit, refund): cộng tiền
+        // - DEBIT_TYPES (charge): trừ tiền
+        // - adjustment: dựa vào option is_credit (mặc định là cộng)
+        if (in_array($type, self::CREDIT_TYPES)) {
+            $balanceAfter = $balanceBefore + $amount;
+        } elseif (in_array($type, self::DEBIT_TYPES)) {
+            $balanceAfter = $balanceBefore - $amount;
+        } else {
+            // adjustment: dựa vào is_credit option
+            $isCredit = $options['is_credit'] ?? true;
+            $balanceAfter = $isCredit ? $balanceBefore + $amount : $balanceBefore - $amount;
+        }
 
         $dongtien = self::create([
             'balance_before'  => $balanceBefore,

@@ -92,6 +92,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/users/{id}', [UserController::class, 'destroy']);
     Route::post('/users/{id}/reset-password', [UserController::class, 'resetPassword']);
     Route::post('/users/{id}/generate-api-key', [UserController::class, 'generateApiKey']);
+    Route::post('/users/{id}/adjust-balance', [UserController::class, 'adjustBalance']);
 
     // Orders
     Route::get('/orders', [OrderController::class, 'index']);

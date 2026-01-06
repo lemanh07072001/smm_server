@@ -100,7 +100,6 @@ class PlaceOrder extends Command
             return;
         }
 
-        $logger->user($order->user_id);
 
         $service = $order->service;
         $provider = $service->providerService->provider ?? null;

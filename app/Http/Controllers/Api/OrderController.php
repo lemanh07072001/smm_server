@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Models\Order;
 use App\Models\Service;
+use App\Models\Dongtien;
+use App\Models\OrderTransaction;
 use App\Helpers\OrderHelper;
 use Illuminate\Http\Request;
 use App\Models\ProviderService;
@@ -218,10 +220,6 @@ class OrderController extends Controller
 
         DB::beginTransaction();
         try {
-            // Trừ tiền từ balance của user
-            $user->balance -= $chargeAmount;
-            $user->save();
-
             // Tạo order trong database với status pending
             $order = Order::create([
                 'user_id' => $user->id,
@@ -242,6 +240,18 @@ class OrderController extends Controller
                 'final_profit' => 0,
                 'is_finalized' => false,
             ]);
+
+            // Lưu số dư trước khi trừ
+            $balanceBefore = (float) $user->balance;
+
+            // Ghi vào bảng order_transactions để thống kê
+            OrderTransaction::createCharge(
+                $order,
+                $user,
+                $service,
+                $balanceBefore,
+                (float) $user->balance
+            );
 
             // Load relationships
             $order->load(['user', 'service', 'providerService.provider']);

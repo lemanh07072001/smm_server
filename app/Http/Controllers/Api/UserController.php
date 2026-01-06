@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
+use App\Models\Dongtien;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -152,6 +153,80 @@ class UserController extends Controller
             'message' => 'Tạo API key thành công.',
             'data' => [
                 'api_key' => $apiKey,
+            ],
+        ]);
+    }
+
+    /**
+     * Cộng hoặc trừ tiền cho user
+     * amount: luôn dương
+     * type: deposit/refund = cộng tiền, charge = trừ tiền, adjustment = dùng is_credit
+     */
+    public function adjustBalance(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'amount' => ['required', 'numeric', 'gt:0'],
+            'type' => ['required', 'string', 'in:deposit,charge,refund,adjustment'],
+            'is_credit' => ['nullable', 'boolean'],
+            'payment_method' => ['nullable', 'string', 'max:50'],
+            'payment_ref' => ['nullable', 'string', 'max:100'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ], [
+            'amount.required' => 'Số tiền là bắt buộc.',
+            'amount.numeric' => 'Số tiền phải là số.',
+            'amount.gt' => 'Số tiền phải lớn hơn 0.',
+            'type.required' => 'Loại giao dịch là bắt buộc.',
+            'type.in' => 'Loại giao dịch phải là: deposit, charge, refund, adjustment.',
+        ]);
+
+        $user = User::findOrFail($id);
+        $amount = (float) $request->amount;
+        $type = $request->type;
+
+        // Xác định đây là giao dịch cộng hay trừ
+        $isCredit = match ($type) {
+            Dongtien::TYPE_DEPOSIT, Dongtien::TYPE_REFUND => true,
+            Dongtien::TYPE_CHARGE => false,
+            default => $request->input('is_credit', true), // adjustment mặc định là cộng
+        };
+
+        // Nếu trừ tiền, kiểm tra số dư
+        if (!$isCredit && $user->balance < $amount) {
+            return response()->json([
+                'message' => 'Số dư không đủ để trừ.',
+                'data' => [
+                    'current_balance' => $user->balance,
+                    'amount_requested' => $amount,
+                ],
+            ], 422);
+        }
+
+        $note = $request->note ?? ($isCredit ? 'Admin cộng tiền' : 'Admin trừ tiền');
+
+        $dongtien = Dongtien::createTransaction(
+            $user,
+            $amount,
+            $type,
+            $note,
+            [
+                'is_credit' => $isCredit,
+                'payment_method' => $request->payment_method,
+                'payment_ref' => $request->payment_ref,
+            ]
+        );
+
+        return response()->json([
+            'message' => $isCredit ? 'Cộng tiền thành công.' : 'Trừ tiền thành công.',
+            'data' => [
+                'user_id' => $user->id,
+                'balance_before' => $dongtien->balance_before,
+                'amount' => $amount,
+                'type' => $type,
+                'is_credit' => $isCredit,
+                'payment_method' => $dongtien->payment_method,
+                'payment_ref' => $dongtien->payment_ref,
+                'balance_after' => $dongtien->balance_after,
+                'note' => $note,
             ],
         ]);
     }
