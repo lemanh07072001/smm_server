@@ -58,15 +58,17 @@ class GenerateOrderReport extends Command
                     $reports[$reportKey][$statusField]++;
                 }
 
+                // Cộng số lượng cho tất cả đơn
+                $reports[$reportKey]['total_quantity'] += $order->quantity;
+
                 // Cộng giá trị tài chính (không tính cho đơn refunded hoặc failed)
                 if (!in_array($order->status, [Order::STATUS_REFUNDED, Order::STATUS_FAILED])) {
-                    $reports[$reportKey]['total_quantity'] += $order->quantity;
                     $reports[$reportKey]['total_charge'] += $order->charge_amount;
                     $reports[$reportKey]['total_cost'] += $order->cost_amount;
                     $reports[$reportKey]['total_profit'] += $order->profit_amount;
                 } else {
                     // Chỉ cộng refund cho đơn refunded hoặc failed
-                    $reports[$reportKey]['total_refund'] += $order->refund_amount;
+                    $reports[$reportKey]['total_refund'] += $order->charge_amount;
                 }
 
             } catch (\Throwable $th) {
