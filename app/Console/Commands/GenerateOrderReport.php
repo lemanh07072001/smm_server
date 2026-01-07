@@ -64,8 +64,10 @@ class GenerateOrderReport extends Command
                     $reports[$reportKey]['total_charge'] += $order->charge_amount;
                     $reports[$reportKey]['total_cost'] += $order->cost_amount;
                     $reports[$reportKey]['total_profit'] += $order->profit_amount;
+                } else {
+                    // Chỉ cộng refund cho đơn refunded hoặc failed
+                    $reports[$reportKey]['total_refund'] += $order->refund_amount;
                 }
-                $reports[$reportKey]['total_refund'] += $order->refund_amount;
 
             } catch (\Throwable $th) {
                 continue;
