@@ -8,41 +8,17 @@ use Illuminate\Console\Command;
 
 class GenerateOrderReport extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'report:order {date}';
+    protected $signature = 'report:order';
 
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Tạo báo cáo thống kê đơn hàng theo ngày truyền vào';
+    protected $description = 'Tạo báo cáo thống kê đơn hàng theo ngày hôm nay';
 
-    /**
-     * Execute the console command.
-     */
     public function handle()
     {
-        $this->info(date("Y-m-d H:i:s") . ' Start');
-        $date = date("Y-m-d", strtotime($this->argument('date')));
-        $this->genReport($date);
-        $this->info("\n" . date("Y-m-d H:i:s") . ' Done');
-        return 0;
-    }
-
-    public function genReport($date)
-    {
-        echo "\nStarting query: " . date('H:i:s d-m-Y') . " for report date: " . $date;
+        $date = date("Y-m-d");
 
         $orders = Order::where('created_at', '>=', "$date 00:00:00")
             ->where('created_at', '<=', "$date 23:59:59")
             ->cursor();
-
-        echo "\nEnding query: " . date('H:i:s d-m-Y');
 
         $reports = [];
         $list_values = [
@@ -61,14 +37,8 @@ class GenerateOrderReport extends Command
             'total_quantity' => 0,
         ];
 
-        echo "\nStarting foreach: " . date('H:i:s d-m-Y');
-
-        foreach ($orders as $key => $order) {
+        foreach ($orders as $order) {
             try {
-                if ($key % 5000 == 0 && $key > 0) {
-                    echo "\n  → Đã xử lý " . $key . " orders...";
-                }
-
                 $dateAt = (int) date('Ymd', strtotime($order->created_at));
                 $keys = [
                     'date_at' => $dateAt,
@@ -96,29 +66,21 @@ class GenerateOrderReport extends Command
                 $reports[$reportKey]['total_refund'] += $order->refund_amount;
 
             } catch (\Throwable $th) {
-                echo "\nError: " . $th->getMessage();
                 continue;
             }
         }
 
-        echo "\nEnding foreach: " . date('H:i:s d-m-Y');
-        echo "\nTổng số reports: " . count($reports);
-
-        echo "\nStarting save to DB: " . date('H:i:s d-m-Y');
-
         foreach ($reports as $report) {
             try {
-                echo " .";
                 ReportOrderDaily::updateOrCreate(
                     ['report_key' => $report['report_key']],
                     $report
                 );
             } catch (\Throwable $th) {
-                echo "\nError: " . $th->getMessage();
                 continue;
             }
         }
 
-        echo "\nEnding save to DB: " . date('H:i:s d-m-Y');
+        return 0;
     }
 }
