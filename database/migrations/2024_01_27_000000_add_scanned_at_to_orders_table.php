@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::table('orders', function (Blueprint $table) {
             $table->timestamp('scanned_at')->nullable()->after('updated_at');
             $table->string('old_scanned_status', 20)->nullable()->after('scanned_at'); // Lưu status lần scan trước
-            $table->index(['updated_at', 'scanned_at'], 'orders_scanned_index');
+            $table->index(['updated_at', 'scanned_at']);
         });
     }
 
@@ -24,7 +24,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            $table->dropIndex('orders_scanned_index');
+            // $table->dropIndex('orders_scanned_index');
             $table->dropColumn(['scanned_at', 'old_scanned_status']);
         });
     }
