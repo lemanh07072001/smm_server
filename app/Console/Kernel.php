@@ -4,6 +4,7 @@ namespace App\Console;
 
 use App\Console\Commands\CheckBank;
 use App\Console\Commands\CheckOrderStatus;
+use App\Console\Commands\GenerateOrderReport;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
@@ -12,6 +13,7 @@ class Kernel extends ConsoleKernel
     protected $commands = [
         CheckBank::class,
         CheckOrderStatus::class,
+        GenerateOrderReport::class,
     ];
 
     /**
@@ -31,6 +33,13 @@ class Kernel extends ConsoleKernel
             ->everyFiveMinutes()
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/order-status.log'));
+
+        // Thống kê đơn hàng mỗi 5 phút
+        $schedule->command('report:order')
+            ->runInBackground()
+            ->everyFiveMinutes()
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/order-report.log'));
     }
 
     /**
