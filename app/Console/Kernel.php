@@ -37,7 +37,7 @@ class Kernel extends ConsoleKernel
         // Thống kê đơn hàng mỗi 10 phút
         $schedule->command('report:order')
             ->runInBackground()
-            ->everyTenMinutes()
+            ->everyMinute()
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/order-report.log'));
     }
