@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CategoryGroupController;
 use App\Http\Controllers\Api\CodeTransactionController;
+use App\Http\Controllers\Api\DongtienController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ProviderController;
 use App\Http\Controllers\Api\ProviderServiceController;
@@ -101,4 +102,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Code Transactions
     Route::post('/code-transactions', [CodeTransactionController::class, 'store']);
+
+    // Transactions (Lịch sử giao dịch)
+    Route::get('/transactions', [DongtienController::class, 'index']);
+    
 });
