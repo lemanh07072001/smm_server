@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\Dongtien;
-use App\Models\OrderTransaction;
 use App\Helpers\OrderHelper;
 use Illuminate\Http\Request;
 use App\Models\ProviderService;
@@ -241,16 +240,13 @@ class OrderController extends Controller
                 'is_finalized' => false,
             ]);
 
-            // Lưu số dư trước khi trừ
-            $balanceBefore = (float) $user->balance;
-
-            // Ghi vào bảng order_transactions để thống kê
-            OrderTransaction::createCharge(
-                $order,
+            // Trừ tiền và ghi vào bảng dongtien
+            Dongtien::createTransaction(
                 $user,
-                $service,
-                $balanceBefore,
-                (float) $user->balance
+                $chargeAmount,
+                Dongtien::TYPE_CHARGE,
+                "Mua dịch vụ #{$service->id} - {$service->name}",
+                ['order_id' => $order->id]
             );
 
             // Load relationships
