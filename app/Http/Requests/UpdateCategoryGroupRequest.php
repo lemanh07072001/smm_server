@@ -28,6 +28,7 @@ class UpdateCategoryGroupRequest extends FormRequest
         return [
             'name' => ['sometimes', 'string', 'max:100'],
             'icon' => ['nullable', 'string', 'max:255'],
+            'image' => ['nullable', 'image', 'max:2048'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
             'category_id' => ['nullable', 'integer', 'exists:categories,id'],
@@ -40,6 +41,8 @@ class UpdateCategoryGroupRequest extends FormRequest
     {
         return [
             'name.max' => 'Tên không được vượt quá 100 ký tự.',
+            'image.image' => 'File phải là hình ảnh.',
+            'image.max' => 'Hình ảnh không được vượt quá 2MB.',
             'is_active.boolean' => 'Trạng thái phải là true hoặc false.',
         ];
     }

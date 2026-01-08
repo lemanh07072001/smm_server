@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateCategoryGroupRequest;
 use App\Models\CategoryGroup;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class CategoryGroupController extends Controller
 {
@@ -53,6 +54,10 @@ class CategoryGroupController extends Controller
     {
         $data = $request->validated();
 
+        if ($request->hasFile('image')) {
+            $path = $request->file('image')->store('category-groups', 'public');
+            $data['image'] = $path;
+        }
 
         $categoryGroup = CategoryGroup::create($data);
 
@@ -62,7 +67,7 @@ class CategoryGroupController extends Controller
         ], 201);
     }
 
-    public function show(int $id): JsonResponse
+    public function show(string $id): JsonResponse
     {
         $categoryGroup = CategoryGroup::findOrFail($id);
 
@@ -71,11 +76,20 @@ class CategoryGroupController extends Controller
         ]);
     }
 
-    public function update(UpdateCategoryGroupRequest $request, int $id): JsonResponse
+    public function update(UpdateCategoryGroupRequest $request, string $id): JsonResponse
     {
         $categoryGroup = CategoryGroup::findOrFail($id);
         $data = $request->validated();
-        logger($data);
+
+        if ($request->hasFile('image')) {
+            // Xóa ảnh cũ nếu có
+            if ($categoryGroup->image) {
+                Storage::disk('public')->delete($categoryGroup->image);
+            }
+            $path = $request->file('image')->store('category-groups', 'public');
+            $data['image'] = $path;
+        }
+
         $categoryGroup->update($data);
 
         return response()->json([
@@ -84,9 +98,15 @@ class CategoryGroupController extends Controller
         ]);
     }
 
-    public function destroy(int $id): JsonResponse
+    public function destroy(string $id): JsonResponse
     {
         $categoryGroup = CategoryGroup::findOrFail($id);
+
+        // Xóa ảnh nếu có
+        if ($categoryGroup->image) {
+            Storage::disk('public')->delete($categoryGroup->image);
+        }
+
         $categoryGroup->delete();
 
         return response()->json([

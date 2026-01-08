@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class CategoryGroup extends Model
@@ -15,6 +16,7 @@ class CategoryGroup extends Model
         'name',
         'slug',
         'icon',
+        'image',
         'sort_order',
         'is_active',
         'group_id',
@@ -63,6 +65,17 @@ class CategoryGroup extends Model
         'sort_order' => 'integer',
         'is_active' => 'boolean',
     ];
+
+    protected $appends = ['image_url'];
+
+    public function getImageUrlAttribute(): ?string
+    {
+        if (!$this->image) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->image);
+    }
 
     public function services(): HasMany
     {

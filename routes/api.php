@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CategoryGroupController;
 use App\Http\Controllers\Api\CodeTransactionController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DongtienController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ProviderController;
@@ -53,6 +54,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/category-groups', [CategoryGroupController::class, 'index']);
     Route::post('/category-groups', [CategoryGroupController::class, 'store']);
     Route::post('/category-groups/delete-multiple', [CategoryGroupController::class, 'destroyMultiple']);
+    Route::get('/category-groups/all', [CategoryGroupController::class, 'all']);
     Route::get('/category-groups/{id}', [CategoryGroupController::class, 'show']);
     Route::post('/category-groups/{id}', [CategoryGroupController::class, 'update']);
     Route::delete('/category-groups/{id}', [CategoryGroupController::class, 'destroy']);
@@ -105,5 +107,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Transactions (Lịch sử giao dịch)
     Route::get('/transactions', [DongtienController::class, 'index']);
-    
+
+    // Dashboard
+    Route::get('/dashboard', [DashboardController::class, 'index']);
+    Route::get('/dashboard/today', [DashboardController::class, 'today']);
+    Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
+
 });

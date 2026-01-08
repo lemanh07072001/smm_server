@@ -4,6 +4,7 @@ namespace App\Console;
 
 use App\Console\Commands\CheckBank;
 use App\Console\Commands\CheckOrderStatus;
+use App\Console\Commands\GenerateDashboardReport;
 use App\Console\Commands\GenerateOrderReport;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
@@ -13,6 +14,7 @@ class Kernel extends ConsoleKernel
     protected $commands = [
         CheckBank::class,
         CheckOrderStatus::class,
+        GenerateDashboardReport::class,
         GenerateOrderReport::class,
     ];
 
@@ -40,6 +42,13 @@ class Kernel extends ConsoleKernel
             ->everyMinute()
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/order-report.log'));
+
+        // Thống kê dashboard mỗi 5 phút
+        $schedule->command('report:dashboard')
+            ->runInBackground()
+            ->everyFiveMinutes()
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/dashboard-report.log'));
     }
 
     /**
