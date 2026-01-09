@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\Dongtien;
+use App\Models\ReportOrderDaily;
 use App\Helpers\OrderHelper;
 use Illuminate\Http\Request;
 use App\Models\ProviderService;
@@ -279,5 +280,65 @@ class OrderController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Lấy thống kê đơn hàng theo user_id từ report_order_daily.
+     */
+    public function getStatsByUser(Request $request, int $userId): JsonResponse
+    {
+        $fromDate = $request->input('from_date');
+        $toDate = $request->input('to_date');
+
+        $query = ReportOrderDaily::where('user_id', $userId);
+
+        if ($fromDate) {
+            $query->where('date_at', '>=', (int) $fromDate);
+        }
+
+        if ($toDate) {
+            $query->where('date_at', '<=', (int) $toDate);
+        }
+
+        $stats = $query->selectRaw('
+            SUM(order_pending) as total_pending,
+            SUM(order_processing) as total_processing,
+            SUM(order_in_progress) as total_in_progress,
+            SUM(order_completed) as total_completed,
+            SUM(order_partial) as total_partial,
+            SUM(order_canceled) as total_canceled,
+            SUM(order_refunded) as total_refunded,
+            SUM(order_failed) as total_failed,
+            SUM(order_pending + order_processing + order_in_progress + order_completed + order_partial + order_canceled + order_refunded + order_failed) as total_orders,
+            SUM(total_charge) as total_spent,
+            SUM(total_cost) as total_cost,
+            SUM(total_profit) as total_profit,
+            SUM(total_refund) as total_refund,
+            SUM(total_quantity) as total_quantity
+        ')->first();
+
+        return response()->json([
+            'user_id' => $userId,
+            'from_date' => $fromDate,
+            'to_date' => $toDate,
+            'data' => [
+                'total_orders' => (int) ($stats->total_orders ?? 0),
+                'total_spent' => (float) ($stats->total_spent ?? 0),
+                'total_cost' => (float) ($stats->total_cost ?? 0),
+                'total_profit' => (float) ($stats->total_profit ?? 0),
+                'total_refund' => (float) ($stats->total_refund ?? 0),
+                'total_quantity' => (int) ($stats->total_quantity ?? 0),
+                'status_counts' => [
+                    'pending' => (int) ($stats->total_pending ?? 0),
+                    'processing' => (int) ($stats->total_processing ?? 0),
+                    'in_progress' => (int) ($stats->total_in_progress ?? 0),
+                    'completed' => (int) ($stats->total_completed ?? 0),
+                    'partial' => (int) ($stats->total_partial ?? 0),
+                    'canceled' => (int) ($stats->total_canceled ?? 0),
+                    'refunded' => (int) ($stats->total_refunded ?? 0),
+                    'failed' => (int) ($stats->total_failed ?? 0),
+                ],
+            ],
+        ]);
     }
 }

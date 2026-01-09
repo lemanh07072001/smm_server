@@ -14,7 +14,6 @@ class Kernel extends ConsoleKernel
     protected $commands = [
         CheckBank::class,
         CheckOrderStatus::class,
-        GenerateDashboardReport::class,
         GenerateOrderReport::class,
     ];
 
@@ -43,12 +42,7 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/order-report.log'));
 
-        // Thống kê dashboard mỗi 5 phút
-        $schedule->command('report:dashboard')
-            ->runInBackground()
-            ->everyFiveMinutes()
-            ->withoutOverlapping()
-            ->appendOutputTo(storage_path('logs/dashboard-report.log'));
+    
     }
 
     /**
