@@ -9,6 +9,7 @@ use App\Helpers\CurlHelper;
 use App\Helpers\RedisHelper;
 use App\Helpers\TelegramHelper;
 use App\Models\CodeTransaction;
+use App\Events\DepositSuccess;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
@@ -253,13 +254,18 @@ class CheckBank extends Command
                         . substr($transaction['PCTime'], 2, 2) . ':'
                         . substr($transaction['PCTime'], 4, 2);
 
-                    Dongtien::createTransaction($user, $amount, Dongtien::TYPE_DEPOSIT, 'Nạp tiền thành công.', [
+                    $dongtien = Dongtien::createTransaction($user, $amount, Dongtien::TYPE_DEPOSIT, 'Nạp tiền thành công.', [
                         'thoigian'       => date('Y-m-d H:i:s', strtotime($str_date)),
                         'payment_method' => 'bank',
                         'payment_ref'    => $Reference,
                         'datas'          => json_encode($bankauto),
                         'bank_auto_id'   => $bank_auto->id,
                     ]);
+
+                    // Broadcast thông báo nạp tiền thành công
+                    if ($dongtien) {
+                        broadcast(new DepositSuccess($dongtien));
+                    }
 
                     $this->info("Nạp tiền thành công cho user {$userId}: " . number_format($amount) . " VND");
                 }
