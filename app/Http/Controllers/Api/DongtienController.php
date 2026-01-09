@@ -27,7 +27,7 @@ class DongtienController extends Controller
         $query->orderBy('id', 'desc');
 
         // Phân trang
-        $perPage = $request->get('per_page', 20);
+        $perPage = $request->get('per_page', 5);
         $transactions = $query->paginate($perPage);
 
         return response()->json($transactions);
