@@ -69,7 +69,7 @@ class OrderStatusUpdated implements ShouldBroadcastNow
     private function getStatusMessage(): string
     {
         return match ($this->order->status) {
-            Order::STATUS_PROCESSING => "Đơn hàng #{$this->order->id} đang được xử lý",
+            Order::STATUS_IN_PROGRESS => "Đơn hàng #{$this->order->id} đang chạy",
             Order::STATUS_COMPLETED => "Đơn hàng #{$this->order->id} đã hoàn thành",
             Order::STATUS_FAILED => "Đơn hàng #{$this->order->id} thất bại: {$this->order->error_message}",
             Order::STATUS_PARTIAL => "Đơn hàng #{$this->order->id} hoàn thành một phần",

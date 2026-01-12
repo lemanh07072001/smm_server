@@ -12,26 +12,31 @@ class Order extends Model
 
     const KEY_ID_REDIS_ORDER = 'key_id_redis_order';
 
+    public const STATUS_PENDING = 'pending';  // Khởi tạo
+    public const STATUS_PROCESSING = 'processing'; // Đang chạy
+    public const STATUS_IN_PROGRESS = 'in_progress'; // Xong
+    public const STATUS_COMPLETED = 'completed'; // Hoàn thành
+    public const STATUS_PARTIAL = 'partial'; // Hoàn thành một phần
+    public const STATUS_CANCELED = 'canceled'; // Hoàn toàn bộ
+    public const STATUS_REFILLING = 'refilling'; // Hoàn toàn bộ
+    public const STATUS_BEFORE_COMPLATE = 'before_complete'; // Hoàn toàn bộ
+    public const STATUS_FAILED = 'failed'; // Thất bại
+
     /**
-     * Status constants
-     *
-     * PENDING      - Đơn hàng mới tạo, chờ đẩy lên provider
-     * PROCESSING   - Đã đẩy lên provider, provider đang xử lý
-     * IN_PROGRESS  - Provider đang thực hiện (đang chạy view/like/follow...)
-     * COMPLETED    - Hoàn thành, đã đủ số lượng yêu cầu
-     * PARTIAL      - Hoàn thành một phần, không đủ số lượng (sẽ refund phần còn lại)
-     * CANCELED     - Đã hủy bởi user hoặc admin
-     * REFUNDED     - Đã hoàn tiền toàn bộ
-     * FAILED       - Thất bại, lỗi từ provider hoặc hệ thống
+     * Mapping status từ text sang số (reverse của STATUS_TEXT_V2)
      */
-    public const STATUS_PENDING = 'pending';
-    public const STATUS_PROCESSING = 'processing';
-    public const STATUS_IN_PROGRESS = 'in_progress';
-    public const STATUS_COMPLETED = 'completed';
-    public const STATUS_PARTIAL = 'partial';
-    public const STATUS_CANCELED = 'canceled';
-    public const STATUS_REFUNDED = 'refunded';
-    public const STATUS_FAILED = 'failed';
+    public const STATUS_NUMBER_MAP = [
+        'pending' => 0,
+        'in_progress' => 1,
+        'completed' => 2,
+        'processing' => 3,
+        'partial' => 4,
+        'canceled' => 5,
+        'refilling' => 6,
+        'before_complete' => 7,
+    ];
+
+  
 
     /**
      * The attributes that are mass assignable.
@@ -153,15 +158,69 @@ class Order extends Model
     {
         return match (strtolower($providerStatus)) {
             'pending'                               => self::STATUS_PENDING,
-            'processing', 'in progress', 'inprogress' => self::STATUS_PROCESSING,
+            'processing'                            => self::STATUS_PROCESSING,
             'in_progress'                           => self::STATUS_IN_PROGRESS,
-            'completed', 'complete', 'success'      => self::STATUS_COMPLETED,
+            'completed'                             => self::STATUS_COMPLETED,
             'partial'                               => self::STATUS_PARTIAL,
-            'canceled', 'cancelled', 'cancel'       => self::STATUS_CANCELED,
-            'refunded', 'refund'                    => self::STATUS_REFUNDED,
-            'failed', 'fail', 'error'               => self::STATUS_FAILED,
+            'canceled'                              => self::STATUS_CANCELED,
+            'failed'                                => self::STATUS_FAILED,
             default                                 => self::STATUS_PENDING,
         };
+    }
+
+    /**
+     * Convert status text sang số (theo STATUS_TEXT_V2)
+     */
+    public static function statusToNumber(string $status): ?int
+    {
+        $statusLower = strtolower($status);
+        
+        // Map từ constants sang số
+        $map = [
+            self::STATUS_PENDING => 0,
+            self::STATUS_IN_PROGRESS => 1,
+            self::STATUS_COMPLETED => 2,
+            self::STATUS_PROCESSING => 3,
+            self::STATUS_PARTIAL => 4,
+            self::STATUS_CANCELED => 5,
+            'refilling' => 6,
+            'before_complete' => 7,
+        ];
+
+        return $map[$statusLower] ?? null;
+    }
+
+    /**
+     * Convert số sang status text (theo STATUS_TEXT_V2)
+     */
+    public static function numberToStatus(int $number): ?string
+    {
+        return self::STATUS_TEXT_V2[$number] ?? null;
+    }
+
+    /**
+     * Convert số sang status constant (lowercase)
+     */
+    public static function numberToStatusConstant(int $number): ?string
+    {
+        $text = self::numberToStatus($number);
+        if (!$text) {
+            return null;
+        }
+
+        // Convert text sang constant format
+        $map = [
+            'Pending' => self::STATUS_PENDING,
+            'In progress' => self::STATUS_IN_PROGRESS,
+            'Completed' => self::STATUS_COMPLETED,
+            'Processing' => self::STATUS_PROCESSING,
+            'Partial' => self::STATUS_PARTIAL,
+            'Canceled' => self::STATUS_CANCELED,
+            'Refilling' => 'refilling',
+            'Before Complete' => 'before_complete',
+        ];
+
+        return $map[$text] ?? strtolower(str_replace(' ', '_', $text));
     }
 }
 

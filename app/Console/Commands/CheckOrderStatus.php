@@ -21,7 +21,6 @@ class CheckOrderStatus extends Command
             ->whereNotIn('status', [
                 Order::STATUS_COMPLETED,
                 Order::STATUS_FAILED,
-                Order::STATUS_REFUNDED,
                 Order::STATUS_CANCELED,
                 Order::STATUS_PARTIAL,
             ])

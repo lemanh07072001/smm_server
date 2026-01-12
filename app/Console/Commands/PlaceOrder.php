@@ -163,7 +163,7 @@ class PlaceOrder extends Command
 
             $updateData = [
                 'provider_order_id' => $providerOrderId,
-                'status'            => Order::STATUS_PROCESSING,
+                'status'            => Order::STATUS_IN_PROGRESS,
             ];
 
             // Parse status data từ response
