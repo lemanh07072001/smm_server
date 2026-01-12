@@ -3,8 +3,10 @@
 namespace App\Console\Commands;
 
 use App\Models\Order;
+use App\Models\Dongtien;
 use App\Services\Providers\ProviderFactory;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class CheckOrderStatus extends Command
@@ -64,24 +66,83 @@ class CheckOrderStatus extends Command
 
     private function updateOrder(Order $order, $statusResponse, $providerService): void
     {
-        $data = $statusResponse['data'] ?? [];
+        $responseData = $statusResponse['data'] ?? [];
+        $providerOrderId = $order->provider_order_id;
+        
+        // Parse response - có thể có 2 format:
+        // 1. {"13674357": {"charge": 0, "status": "Canceled", ...}}
+        // 2. {"charge": 0, "status": "Canceled", ...}
+        $statusData = $responseData[$providerOrderId] ?? (isset($responseData['status']) ? $responseData : null);
+
+        if (!$statusData) {
+            return;
+        }
+
         $updateData = [];
+        $providerStatus = $statusData['status'] ?? null;
 
-        if (isset($data['start_count'])) {
-            $updateData['start_count'] = $data['start_count'];
+        if (isset($statusData['start_count'])) {
+            $updateData['start_count'] = $statusData['start_count'];
         }
 
-        if (isset($data['remains'])) {
-            $updateData['remains'] = $data['remains'];
+        if (isset($statusData['remains'])) {
+            $updateData['remains'] = $statusData['remains'];
         }
 
-        if (!empty($data['status'])) {
-            $updateData['status'] = $providerService->mapProviderStatus($data['status']);
+        if (!empty($providerStatus)) {
+            $updateData['status'] = $providerService->mapProviderStatus($providerStatus);
+        }
+
+        // Nếu status từ provider là "Canceled", hoàn tiền cho user
+        if (strtolower($providerStatus) === 'canceled' && $order->status !== Order::STATUS_CANCELED) {
+            $this->refundOrder($order);
         }
 
         if (!empty($updateData)) {
             $order->update($updateData);
             echo '1';
+        }
+    }
+
+    /**
+     * Hoàn tiền cho user khi order bị cancel từ provider
+     */
+    private function refundOrder(Order $order): void
+    {
+        if ($order->charge_amount <= 0 || !$order->user) {
+            return;
+        }
+
+        DB::beginTransaction();
+        try {
+            $refundAmount = $order->charge_amount;
+
+            // Tạo dòng tiền hoàn
+            Dongtien::createTransaction(
+                $order->user,
+                $refundAmount,
+                Dongtien::TYPE_REFUND,
+                "Hoàn tiền đơn hàng #{$order->id} đã bị hủy từ provider",
+                [
+                    'order_id' => $order->id,
+                    'payment_method' => 'system',
+                ]
+            );
+
+            // Cập nhật refund_amount
+            $order->update([
+                'refund_amount' => $refundAmount,
+            ]);
+
+            DB::commit();
+            
+            $this->info("    💰 Hoàn tiền {$refundAmount} cho order #{$order->id}");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error refunding order from provider cancel', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 }

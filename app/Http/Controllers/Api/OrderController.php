@@ -351,120 +351,38 @@ class OrderController extends Controller
     {
         $user = $request->user();
 
-        // Lấy order với relationships
+        // Lấy order với relationships cần thiết
         $order = Order::with(['user', 'service.providerService.provider'])
-            ->where('id', $orderId)
-            ->first();
+            ->find($orderId);
 
         if (!$order) {
-            return response()->json([
-                'message' => 'Đơn hàng không tồn tại.',
-                'status' => 'FAILED',
-            ], 404);
+            return $this->errorResponse('Đơn hàng không tồn tại.', 404);
         }
 
-        // Kiểm tra quyền: user chỉ có thể hủy đơn của chính mình, admin có thể hủy mọi đơn
-        if ($user->role !== 0 && $order->user_id !== $user->id) {
-            return response()->json([
-                'message' => 'Bạn không có quyền hủy đơn hàng này.',
-                'status' => 'FAILED',
-            ], 403);
+        // Kiểm tra quyền
+        if (!$this->canUserCancelOrder($user, $order)) {
+            return $this->errorResponse('Bạn không có quyền hủy đơn hàng này.', 403);
         }
 
-        // Kiểm tra đơn hàng có thể hủy không - chỉ cho phép pending, processing, in_progress
-        $allowedStatuses = [
-            Order::STATUS_PENDING,
-            Order::STATUS_PROCESSING,
-            Order::STATUS_IN_PROGRESS,
-        ];
-        
-        if (!in_array($order->status, $allowedStatuses)) {
-            return response()->json([
-                'message' => 'Đơn hàng không thể hủy. Chỉ có thể hủy đơn hàng ở trạng thái: pending, processing, in_progress.',
-                'status' => 'FAILED',
-            ], 400);
+        // Kiểm tra status có thể hủy
+        if (!$order->canBeCanceled()) {
+            return $this->errorResponse(
+                'Đơn hàng không thể hủy. Chỉ có thể hủy đơn hàng ở trạng thái: pending, processing, in_progress.',
+                400
+            );
         }
 
-        // Khởi tạo activity logger
         $logger = OrderActivityLogger::for($order->id)->user($order->user_id);
 
         DB::beginTransaction();
         try {
-            $provider = $order->service->providerService->provider ?? null;
-            $providerOrderId = $order->provider_order_id;
+            // Hủy ở provider nếu có
+            $this->cancelOrderAtProvider($order, $logger);
 
-            // Nếu đơn đã được đẩy lên provider, thử hủy ở provider trước
-            if ($provider && $providerOrderId && ProviderFactory::isSupported($provider->code)) {
-                try {
-                    $logger->provider($provider->code, $providerOrderId);
-                    $logger->providerRequest(
-                        $provider->api_url . '/cancel',
-                        ['order_id' => $providerOrderId]
-                    );
-
-                    $providerService = ProviderFactory::make($provider);
-                    
-                    // Gọi API cancel order từ provider (nếu có implement)
-                    if (method_exists($providerService, 'canceledOrder')) {
-                        $cancelResponse = $providerService->canceledOrder($providerOrderId);
-                        $logger->providerResponse($cancelResponse);
-                        
-                        // Log kết quả
-                        if (!$providerService->isSuccessResponse($cancelResponse)) {
-                            $errorMsg = $cancelResponse['data']['error'] ?? $cancelResponse['body'] ?? 'Unknown error';
-                            Log::warning('Provider cancel order failed', [
-                                'order_id' => $order->id,
-                                'provider_order_id' => $providerOrderId,
-                                'error' => $errorMsg,
-                            ]);
-                            // Vẫn tiếp tục hủy ở hệ thống dù provider không hủy được
-                        }
-                    }
-                } catch (\Exception $e) {
-                    Log::error('Error canceling order at provider', [
-                        'order_id' => $order->id,
-                        'provider_order_id' => $providerOrderId,
-                        'error' => $e->getMessage(),
-                    ]);
-                    // Vẫn tiếp tục hủy ở hệ thống
-                }
-            }
-
-            // Tính toán số tiền hoàn lại
-            // Nếu đơn đang pending (chưa đẩy lên provider) -> hoàn toàn bộ
-            // Nếu đã đẩy lên provider -> có thể hoàn một phần hoặc toàn bộ tùy policy
-            $refundAmount = $order->charge_amount;
-
-            // Cập nhật order status
-            $order->update([
-                'status' => Order::STATUS_CANCELED,
-                'refund_amount' => $refundAmount,
-            ]);
-
-            // Hoàn tiền cho user
-            if ($refundAmount > 0) {
-                $userOrder = $order->user;
-                Dongtien::createTransaction(
-                    $userOrder,
-                    $refundAmount,
-                    Dongtien::TYPE_REFUND,
-                    "Hoàn tiền đơn hàng #{$order->id} đã hủy",
-                    [
-                        'order_id' => $order->id,
-                        'payment_method' => 'system',
-                    ]
-                );
-
-                $logger->refund($refundAmount);
-            }
-
-            // Log activity
-            $logger->orderCanceled();
+            // Cập nhật order và hoàn tiền
+            $this->updateOrderAndRefund($order, $logger);
 
             DB::commit();
-
-            // Load lại order để lấy status mới
-            $order->refresh();
 
             return response()->json([
                 'message' => 'Hủy đơn hàng thành công.',
@@ -473,18 +391,95 @@ class OrderController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-
+            
             Log::error('Error canceling order', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             $logger->error($e->getMessage(), $e);
 
-            return response()->json([
-                'message' => 'Lỗi khi hủy đơn hàng. Vui lòng thử lại.',
-                'status' => 'FAILED',
-            ], 500);
+            return $this->errorResponse('Lỗi khi hủy đơn hàng. Vui lòng thử lại.', 500);
         }
+    }
+
+    /**
+     * Kiểm tra user có quyền hủy đơn hàng không
+     */
+    private function canUserCancelOrder($user, Order $order): bool
+    {
+        // Admin (role = 0) có thể hủy mọi đơn, user chỉ hủy được đơn của mình
+        return $user->role === 0 || $order->user_id === $user->id;
+    }
+
+    /**
+     * Hủy đơn hàng ở provider
+     */
+    private function cancelOrderAtProvider(Order $order, OrderActivityLogger $logger): void
+    {
+        $provider = $order->service->providerService->provider ?? null;
+        $providerOrderId = $order->provider_order_id;
+
+        if (!$provider || !$providerOrderId || !ProviderFactory::isSupported($provider->code)) {
+            return;
+        }
+
+        try {
+            $logger->provider($provider->code, $providerOrderId);
+            $logger->providerRequest(
+                $provider->api_url . '/cancel',
+                ['order_id' => $providerOrderId]
+            );
+
+            $providerService = ProviderFactory::make($provider);
+            
+            if (!method_exists($providerService, 'canceledOrder')) {
+                return;
+            }
+
+            $cancelResponse = $providerService->canceledOrder($providerOrderId);
+            $logger->providerResponse($cancelResponse);
+            
+            if (!$providerService->isSuccessResponse($cancelResponse)) {
+                $errorMsg = $cancelResponse['data']['error'] ?? $cancelResponse['body'] ?? 'Unknown error';
+                Log::warning('Provider cancel order failed', [
+                    'order_id' => $order->id,
+                    'provider_order_id' => $providerOrderId,
+                    'error' => $errorMsg,
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error canceling order at provider', [
+                'order_id' => $order->id,
+                'provider_order_id' => $providerOrderId,
+                'error' => $e->getMessage(),
+            ]);
+            // Vẫn tiếp tục hủy ở hệ thống dù provider lỗi
+        }
+    }
+
+    /**
+     * Cập nhật order status
+     */
+    private function updateOrderAndRefund(Order $order, OrderActivityLogger $logger): void
+    {
+        // Cập nhật order status
+        $order->update([
+            'status' => Order::STATUS_CANCELED,
+        ]);
+
+        $logger->orderCanceled();
+    }
+
+    /**
+     * Trả về response lỗi chuẩn
+     */
+    private function errorResponse(string $message, int $statusCode = 400): JsonResponse
+    {
+        return response()->json([
+            'message' => $message,
+            'status' => 'FAILED',
+        ], $statusCode);
     }
 }
