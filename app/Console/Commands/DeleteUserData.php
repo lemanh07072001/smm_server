@@ -4,10 +4,8 @@ namespace App\Console\Commands;
 
 use App\Models\BankAuto;
 use App\Models\Dongtien;
-use App\Models\LoginHistory;
 use App\Models\Order;
 use App\Models\OrderActivityLog;
-use App\Models\ReportOrderDaily;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +15,7 @@ class DeleteUserData extends Command
 {
     protected $signature = 'user:delete-data {--email=admin@admin.com} {--id=1} {--force}';
 
-    protected $description = 'Xóa tất cả dữ liệu liên quan đến user (orders, transactions, login history, etc.)';
+    protected $description = 'Xóa dữ liệu liên quan đến user: Orders, Dongtien, BankAuto, Activity Logs';
 
     public function handle()
     {
@@ -73,13 +71,6 @@ class DeleteUserData extends Command
                 $this->info("  ✅ Đã xóa {$bankAutoCount} bank auto records");
             }
 
-            // Xóa LoginHistory
-            $loginHistoryCount = LoginHistory::where('user_id', $user->id)->count();
-            if ($loginHistoryCount > 0) {
-                LoginHistory::where('user_id', $user->id)->delete();
-                $this->info("  ✅ Đã xóa {$loginHistoryCount} login history records");
-            }
-
             // Xóa OrderActivityLog (MongoDB)
             try {
                 $activityLogCount = OrderActivityLog::where('user_id', $user->id)->count();
@@ -89,31 +80,6 @@ class DeleteUserData extends Command
                 }
             } catch (\Exception $e) {
                 $this->warn("  ⚠️  Không thể xóa activity logs: " . $e->getMessage());
-            }
-
-            // Xóa ReportOrderDaily
-            $reportCount = ReportOrderDaily::where('user_id', $user->id)->count();
-            if ($reportCount > 0) {
-                ReportOrderDaily::where('user_id', $user->id)->delete();
-                $this->info("  ✅ Đã xóa {$reportCount} report records");
-            }
-
-            // Xóa Personal Access Tokens (Sanctum)
-            try {
-                $tokensCount = DB::table('personal_access_tokens')
-                    ->where('tokenable_type', User::class)
-                    ->where('tokenable_id', $user->id)
-                    ->count();
-                
-                if ($tokensCount > 0) {
-                    DB::table('personal_access_tokens')
-                        ->where('tokenable_type', User::class)
-                        ->where('tokenable_id', $user->id)
-                        ->delete();
-                    $this->info("  ✅ Đã xóa {$tokensCount} access tokens");
-                }
-            } catch (\Exception $e) {
-                $this->warn("  ⚠️  Không thể xóa access tokens: " . $e->getMessage());
             }
 
             DB::commit();
@@ -145,13 +111,7 @@ class DeleteUserData extends Command
             'orders' => Order::where('user_id', $userId)->count(),
             'dongtien' => Dongtien::where('user_id', $userId)->count(),
             'bank_auto' => BankAuto::where('user_id', $userId)->count(),
-            'login_histories' => LoginHistory::where('user_id', $userId)->count(),
             'activity_logs' => OrderActivityLog::where('user_id', $userId)->count(),
-            'reports' => ReportOrderDaily::where('user_id', $userId)->count(),
-            'tokens' => DB::table('personal_access_tokens')
-                ->where('tokenable_type', User::class)
-                ->where('tokenable_id', $userId)
-                ->count(),
         ];
     }
 
@@ -167,12 +127,8 @@ class DeleteUserData extends Command
                 ['Orders', $stats['orders']],
                 ['Dòng tiền (Dongtien)', $stats['dongtien']],
                 ['Bank Auto', $stats['bank_auto']],
-                ['Login History', $stats['login_histories']],
                 ['Activity Logs', $stats['activity_logs']],
-                ['Reports', $stats['reports']],
-                ['Access Tokens', $stats['tokens']],
             ]
         );
     }
 }
-
