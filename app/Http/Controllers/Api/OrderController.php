@@ -359,6 +359,7 @@ class OrderController extends Controller
         if (!$order) {
             return response()->json([
                 'message' => 'Đơn hàng không tồn tại.',
+                'status' => 'FAILED',
             ], 404);
         }
 
@@ -366,14 +367,21 @@ class OrderController extends Controller
         if ($user->role !== 0 && $order->user_id !== $user->id) {
             return response()->json([
                 'message' => 'Bạn không có quyền hủy đơn hàng này.',
+                'status' => 'FAILED',
             ], 403);
         }
 
-        // Kiểm tra đơn hàng có thể hủy không
-        if (!$order->canBeCanceled()) {
+        // Kiểm tra đơn hàng có thể hủy không - chỉ cho phép pending, processing, in_progress
+        $allowedStatuses = [
+            Order::STATUS_PENDING,
+            Order::STATUS_PROCESSING,
+            Order::STATUS_IN_PROGRESS,
+        ];
+        
+        if (!in_array($order->status, $allowedStatuses)) {
             return response()->json([
                 'message' => 'Đơn hàng không thể hủy. Chỉ có thể hủy đơn hàng ở trạng thái: pending, processing, in_progress.',
-                'current_status' => $order->status,
+                'status' => 'FAILED',
             ], 400);
         }
 
@@ -455,17 +463,12 @@ class OrderController extends Controller
 
             DB::commit();
 
-            // Load lại order với relationships
+            // Load lại order để lấy status mới
             $order->refresh();
-            $order->load(['user', 'service', 'providerService.provider']);
 
             return response()->json([
                 'message' => 'Hủy đơn hàng thành công.',
-                'data' => [
-                    'order' => $order,
-                    'refund_amount' => (float) $refundAmount,
-                    'new_balance' => $order->user ? (float) $order->user->balance : null,
-                ],
+                'status' => 'SUCCESS',
             ], 200);
 
         } catch (\Exception $e) {
@@ -480,7 +483,7 @@ class OrderController extends Controller
 
             return response()->json([
                 'message' => 'Lỗi khi hủy đơn hàng. Vui lòng thử lại.',
-                'error' => $e->getMessage(),
+                'status' => 'FAILED',
             ], 500);
         }
     }
