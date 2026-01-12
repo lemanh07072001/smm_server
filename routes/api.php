@@ -101,6 +101,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/user/{userId}', [OrderController::class, 'getOrdersByUser']);
     Route::post('/add-order', [OrderController::class, 'addOrder']);
+    Route::post('/orders/{orderId}/cancel', [OrderController::class, 'cancelOrder']);
 
     // Code Transactions
     Route::post('/code-transactions', [CodeTransactionController::class, 'store']);

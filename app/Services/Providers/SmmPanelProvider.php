@@ -68,4 +68,34 @@ class SmmPanelProvider extends BaseProvider
             'order' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
         ];
     }
+
+    /**
+     * Build request body cho cancel order
+     * SMM Panel dùng cùng endpoint với add order, action = 'cancel'
+     */
+    protected function buildCancelBody(string|array $orderIds): array
+    {
+        return [
+            'key' => $this->provider->api_key,
+            'action' => 'cancel',
+            'order' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
+        ];
+    }
+
+    /**
+     * Nếu provider có endpoint riêng cho cancel, override buildCancelUrl():
+     * 
+     * protected function buildCancelUrl(): string
+     * {
+     *     return rtrim($this->provider->api_url, '/') . '/api/v2/cancel';
+     * }
+     * 
+     * Nếu response format khác, override parseCancelResponse():
+     * 
+     * protected function parseCancelResponse(array $response): array
+     * {
+     *     // Custom parsing logic
+     *     return $response;
+     * }
+     */
 }

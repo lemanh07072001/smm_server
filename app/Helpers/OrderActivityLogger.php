@@ -184,6 +184,22 @@ class OrderActivityLogger
     }
 
     /**
+     * Log order canceled
+     */
+    public function orderCanceled(string $reason = ''): void
+    {
+        $message = 'Đơn hàng đã được hủy';
+        if ($reason) {
+            $message .= ': ' . $reason;
+        }
+        $this->log(
+            OrderActivityLog::TYPE_ORDER_CANCELED,
+            $message,
+            OrderActivityLog::LEVEL_WARNING
+        );
+    }
+
+    /**
      * Log order placed success - đẩy đơn lên provider thành công
      */
     public function orderPlacedSuccess(string $providerOrderId, string $status): void

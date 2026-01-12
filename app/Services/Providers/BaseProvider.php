@@ -145,6 +145,76 @@ abstract class BaseProvider implements ProviderInterface
     }
 
     /**
+     * Cancel order at provider
+     * Mỗi provider có thể override method này để xử lý riêng
+     */
+    public function canceledOrder(string|array $orderIds): array
+    {
+        $url = $this->buildCancelUrl();
+        $body = $this->buildCancelBody($orderIds);
+
+        try {
+            Log::info('Provider Cancel Order Request', [
+                'provider'  => $this->provider->code,
+                'url'       => $url,
+                'body'      => $body,
+            ]);
+
+            // Luôn dùng POST method
+            $response = Http::timeout(30)->asForm()->post($url, $body);
+
+            $result = [
+                'success'       => $response->successful(),
+                'status_code'   => $response->status(),
+                'body'          => $response->body(),
+                'data'          => $response->json() ?? [],
+            ];
+
+            // Parse response theo format của từng provider
+            $result = $this->parseCancelResponse($result);
+
+            return $result;
+        } catch (\Exception $e) {
+            Log::error('Provider Cancel Order Error', [
+                'provider'  => $this->provider->code,
+                'error'     => $e->getMessage(),
+            ]);
+
+            return [
+                'success'       => false,
+                'status_code'   => 0,
+                'body'          => $e->getMessage(),
+                'data'          => [],
+            ];
+        }
+    }
+
+    /**
+     * Build cancel URL - override in child class nếu endpoint khác với buildApiUrl()
+     * Mặc định dùng cùng URL với add order
+     */
+    protected function buildCancelUrl(): string
+    {
+        return $this->buildApiUrl();
+    }
+
+    /**
+     * Build request body for cancel order - override in child class
+     */
+    protected function buildCancelBody(string|array $orderIds): array
+    {
+        return [];
+    }
+
+    /**
+     * Parse cancel response - override in child class nếu format khác
+     */
+    protected function parseCancelResponse(array $response): array
+    {
+        return $response;
+    }
+
+    /**
      * Build request body for status check - override in child class
      */
     protected function buildStatusBody(string|array $orderIds): array

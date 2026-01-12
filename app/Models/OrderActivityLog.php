@@ -21,6 +21,7 @@ class OrderActivityLog extends Model
     public const TYPE_ORDER_FAILED = 'order_failed';
     public const TYPE_ORDER_COMPLETED = 'order_completed';
     public const TYPE_ORDER_PLACED_SUCCESS = 'order_placed_success';
+    public const TYPE_ORDER_CANCELED = 'order_canceled';
     public const TYPE_PROCESSING_COMPLETED = 'processing_completed';
     public const TYPE_REFUND = 'refund';
     public const TYPE_ERROR = 'error';

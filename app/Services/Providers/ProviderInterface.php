@@ -48,6 +48,11 @@ interface ProviderInterface
     public function getOrderStatus(string|array $orderIds): array;
 
     /**
+     * Get order status from provider
+    */
+    public function canceledOrder(string|array $orderIds): array;
+
+    /**
      * Parse status response from provider
      */
     public function parseStatusResponse(array $response): array;

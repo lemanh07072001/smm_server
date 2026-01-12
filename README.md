@@ -1,66 +1,169 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# SSM Backend - Hệ thống SMM (Social Media Marketing)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## 📋 Tổng quan
 
-## About Laravel
+SSM Backend là một ứng dụng Laravel 10 phục vụ hệ thống SMM (Social Media Marketing). Hệ thống cho phép người dùng đặt các dịch vụ tăng tương tác mạng xã hội (like, follow, comment, view...) thông qua các nhà cung cấp bên thứ ba (providers).
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 🏗️ Kiến trúc hệ thống
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### Tech Stack
+- **Framework:** Laravel 10
+- **Database:** MySQL (dữ liệu chính), MongoDB (activity logs)
+- **Cache/Queue:** Redis
+- **Authentication:** Laravel Sanctum
+- **HTTP Client:** Guzzle
+- **Notifications:** Telegram Bot
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### Luồng xử lý chính
 
-## Learning Laravel
+1. **Đặt đơn hàng:** User → API → Validate → Trừ tiền → Tạo Order → Đẩy vào Redis Queue
+2. **Xử lý đơn:** Worker đọc từ Redis → Gọi Provider API → Cập nhật status
+3. **Theo dõi:** Background job check status định kỳ từ Provider
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### Cấu trúc thư mục quan trọng
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+```
+app/
+├── Console/Commands/      # Artisan commands (PlaceOrder, CheckOrderStatus...)
+├── Helpers/               # Helper classes (RedisHelper, OrderActivityLogger...)
+├── Http/Controllers/      # API Controllers
+├── Models/                # Eloquent Models (User, Order, Service, Provider...)
+└── Services/Providers/    # Provider implementations (SmmPanel, TraoDoiTuongTac)
+```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## 🔑 Models chính
 
-## Laravel Sponsors
+- **User:** Quản lý người dùng, balance, discount
+- **Order:** Đơn hàng với status (pending, processing, completed, failed...)
+- **Service:** Dịch vụ bán cho user (Facebook likes, Tiktok views...)
+- **Provider:** Nhà cung cấp bên thứ ba
+- **ProviderService:** Mapping service với provider service
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## 📚 Tài liệu chi tiết
 
-### Premium Partners
+Xem file **[PROJECT_DOCUMENTATION.md](./PROJECT_DOCUMENTATION.md)** để biết thêm chi tiết về:
+- Models & Relationships
+- API Endpoints
+- Helper Classes
+- Provider Architecture
+- Database Configuration
+- Deployment Notes
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+## 🚀 Quick Start
 
-## Contributing
+### Yêu cầu hệ thống
+- PHP >= 8.2
+- MySQL 8.0+
+- MongoDB 4.4+
+- Redis 6.0+
+- Composer
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### Cài đặt
 
-## Code of Conduct
+```bash
+# Install dependencies
+composer install
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+# Setup environment
+cp .env.example .env
+php artisan key:generate
 
-## Security Vulnerabilities
+# Run migrations
+php artisan migrate
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+# Seed dữ liệu (nếu cần)
+php artisan db:seed
+```
 
-## License
+### Chạy Development
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+# Chạy server + queue + vite cùng lúc
+composer dev
+
+# Hoặc chạy riêng lẻ:
+php artisan serve          # Laravel server
+php artisan queue:work     # Queue worker
+npm run dev                # Vite dev server
+```
+
+### Background Workers (Production)
+
+Sử dụng Supervisor để chạy các workers:
+
+```bash
+# Xử lý đơn hàng từ Redis queue
+php artisan order_place
+
+# Lưu activity logs vào MongoDB
+php artisan activity_log:save
+
+# Check status đơn hàng định kỳ
+php artisan schedule:run   # (chạy qua cron)
+```
+
+## 🔧 Artisan Commands
+
+| Command | Mô tả |
+|---------|-------|
+| `order_place` | Xử lý đơn hàng pending từ Redis queue, đẩy lên provider |
+| `activity_log:save` | Lưu activity logs từ Redis queue vào MongoDB |
+| `check:order-status` | Kiểm tra và cập nhật status đơn hàng từ provider |
+| `check:bank` | Kiểm tra giao dịch ngân hàng tự động |
+| `generate:order-report` | Tạo báo cáo đơn hàng |
+
+## 🌐 API Endpoints chính
+
+### Public (Không cần auth)
+- `POST /api/register` - Đăng ký
+- `POST /api/login` - Đăng nhập
+- `GET /api/categories/all` - Danh sách categories
+- `GET /api/services/all` - Danh sách services
+
+### Protected (Cần auth:sanctum)
+- `POST /api/add-order` - Tạo đơn hàng mới
+- `GET /api/orders` - Danh sách đơn hàng
+- `GET /api/dashboard` - Thống kê dashboard
+- `GET /api/transactions` - Lịch sử giao dịch
+- `POST /api/code-transactions` - Nạp tiền bằng mã giao dịch
+
+Xem đầy đủ tại [PROJECT_DOCUMENTATION.md](./PROJECT_DOCUMENTATION.md#3-api-endpoints)
+
+## ⚙️ Environment Variables
+
+Các biến môi trường quan trọng trong `.env`:
+
+```env
+# Database
+DB_CONNECTION=mysql
+DB_DATABASE=ssm_backend
+
+# MongoDB (Activity Logs)
+MONGODB_DATABASE=ssm_logs
+
+# Redis
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+
+# Telegram Notifications
+TELEGRAM_BOT_TOKEN=xxx
+TELEGRAM_CHAT_ID=xxx
+TELEGRAM_ERROR_BOT_TOKEN=xxx
+TELEGRAM_ERROR_CHAT_ID=xxx
+```
+
+## 📦 Dependencies chính
+
+- `laravel/framework ^10.10` - Laravel framework
+- `laravel/sanctum ^3.3` - API authentication
+- `guzzlehttp/guzzle ^7.2` - HTTP client cho provider APIs
+- `mongodb/laravel-mongodb ^5.5` - MongoDB driver
+- `laravel/reverb ^1.7` - WebSocket server
+
+## 📝 Notes
+
+- Hệ thống sử dụng Redis queue để xử lý đơn hàng bất đồng bộ
+- Activity logs được lưu vào MongoDB để tối ưu hiệu suất
+- Có tích hợp Telegram để gửi thông báo lỗi hệ thống
+- Order status: `pending` → `processing` → `in_progress` → `completed`
+- Hỗ trợ nhiều providers: SmmPanel, TraoDoiTuongTac
