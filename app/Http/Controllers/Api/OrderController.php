@@ -464,9 +464,9 @@ class OrderController extends Controller
      */
     private function updateOrderAndRefund(Order $order, OrderActivityLogger $logger): void
     {
-        // Cập nhật order status
+        // Cập nhật order status về Processing khi hủy
         $order->update([
-            'status' => Order::STATUS_CANCELED,
+            'status' => Order::STATUS_PROCESSING,
         ]);
 
         $logger->orderCanceled();
