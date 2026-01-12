@@ -31,7 +31,7 @@ class Kernel extends ConsoleKernel
 
         $schedule->command('order:check-status')
             ->runInBackground()
-            ->everyFiveMinutes()
+            ->everyMinute()
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/order-status.log'));
 
