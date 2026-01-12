@@ -115,13 +115,22 @@ class CheckOrderStatus extends Command
         DB::beginTransaction();
         try {
             $refundAmount = $order->charge_amount;
+            // Khóa user để đảm bảo cộng tiền chính xác
+            $user = $order->user()->lockForUpdate()->first();
+            if (!$user) {
+                DB::rollBack();
+                Log::warning('Refund skipped: user not found', [
+                    'order_id' => $order->id,
+                ]);
+                return;
+            }
 
             // Tạo dòng tiền hoàn
             Dongtien::createTransaction(
-                $order->user,
+                $user,
                 $refundAmount,
                 Dongtien::TYPE_REFUND,
-                "Hoàn tiền đơn hàng #{$order->id} đã bị hủy từ provider",
+                "Hoàn tiền đơn hàng #{$order->id}",
                 [
                     'order_id' => $order->id,
                     'payment_method' => 'system',
@@ -133,9 +142,11 @@ class CheckOrderStatus extends Command
                 'refund_amount' => $refundAmount,
             ]);
 
+            // Log số dư mới
+            $user->refresh();
+            $this->info("    💰 Hoàn tiền {$refundAmount} cho order #{$order->id}, số dư mới: {$user->balance}");
+
             DB::commit();
-            
-            $this->info("    💰 Hoàn tiền {$refundAmount} cho order #{$order->id}");
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error refunding order from provider cancel', [

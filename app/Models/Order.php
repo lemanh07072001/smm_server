@@ -13,9 +13,9 @@ class Order extends Model
     const KEY_ID_REDIS_ORDER = 'key_id_redis_order';
 
     public const STATUS_PENDING = 'pending';  // Khởi tạo
-    public const STATUS_PROCESSING = 'processing'; // Đang chạy
-    public const STATUS_IN_PROGRESS = 'in_progress'; // Xong
+    public const STATUS_IN_PROGRESS = 'in_progress'; // Đang chạy
     public const STATUS_COMPLETED = 'completed'; // Hoàn thành
+    public const STATUS_PROCESSING = 'processing'; //  Chờ hoàn
     public const STATUS_PARTIAL = 'partial'; // Hoàn thành một phần
     public const STATUS_CANCELED = 'canceled'; // Hoàn toàn bộ
     public const STATUS_REFILLING = 'refilling'; // Hoàn toàn bộ
