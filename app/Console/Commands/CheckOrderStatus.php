@@ -16,10 +16,12 @@ class CheckOrderStatus extends Command
     public function handle()
     {
         $orders = Order::with(['service.providerService.provider'])
-            ->whereIn('status', [
-                Order::STATUS_PENDING,
-                Order::STATUS_PROCESSING,
-                Order::STATUS_IN_PROGRESS,
+            ->whereNotIn('status', [
+                Order::STATUS_COMPLETED,
+                Order::STATUS_FAILED,
+                Order::STATUS_REFUNDED,
+                Order::STATUS_CANCELED,
+                Order::STATUS_PARTIAL,
             ])
             ->whereNotNull('provider_order_id')
             ->get();

@@ -3,6 +3,7 @@
 namespace App\Services\Providers;
 
 use App\Models\Service;
+use Illuminate\Support\Facades\Log;
 
 class TraoDoiTuongTacProvider extends BaseProvider
 {
@@ -52,15 +53,64 @@ class TraoDoiTuongTacProvider extends BaseProvider
     }
 
     /**
+     * Override canceledOrder để xử lý riêng cho Trao Đổi Tương Tác
+     * API yêu cầu: JSON body, field "orders"
+     */
+    public function canceledOrder(string|array $orderIds): array
+    {
+        $url = $this->buildCancelUrl();
+        $body = $this->buildCancelBody($orderIds);
+
+        try {
+            Log::info('TraoDoiTuongTac Cancel Order Request', [
+                'provider'  => $this->provider->code,
+                'url'       => $url,
+                'body'      => $body,
+            ]);
+
+            // Gọi API với JSON body
+            $response = Http::timeout(30)
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                ])
+                ->post($url, $body);
+
+            $result = [
+                'success'       => $response->successful(),
+                'status_code'   => $response->status(),
+                'body'          => $response->body(),
+                'data'          => $response->json() ?? [],
+            ];
+
+            // Parse response
+            $result = $this->parseCancelResponse($result);
+
+            return $result;
+        } catch (\Exception $e) {
+            Log::error('TraoDoiTuongTac Cancel Order Error', [
+                'provider'  => $this->provider->code,
+                'error'     => $e->getMessage(),
+            ]);
+
+            return [
+                'success'       => false,
+                'status_code'   => 0,
+                'body'          => $e->getMessage(),
+                'data'          => [],
+            ];
+        }
+    }
+
+    /**
      * Build request body cho cancel order
-     * Trao Đổi Tương Tác dùng cùng endpoint với add order, action = 'cancel'
+     * Trao Đổi Tương Tác dùng field "orders" (không phải "order")
      */
     protected function buildCancelBody(string|array $orderIds): array
     {
         return [
             'key' => $this->provider->api_key,
             'action' => 'cancel',
-            'order' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
+            'orders' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
         ];
     }
 
