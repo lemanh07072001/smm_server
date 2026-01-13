@@ -154,22 +154,26 @@ class DashboardController extends Controller
     }
 
     /**
-     * Lấy 10 lịch sử đăng nhập mới nhất
+     * Lấy lịch sử đăng nhập có phân trang
      */
     public function recentLogins(Request $request): JsonResponse
     {
-        $limit = $request->get('limit', 10);
-        $limit = min($limit, 50);
+        $perPage = $request->input('per_page', 5);
         $user = $request->user();
 
         $logins = LoginHistory::with('user:id,name,email')
             ->orderBy('login_at', 'desc')
-            ->where('user_id',$user->id)
-            ->limit($limit)
-            ->get();
+            ->where('user_id', $user->id)
+            ->paginate($perPage);
 
         return response()->json([
-            'data' => $logins,
+            'data' => $logins->items(),
+            'pagination' => [
+                'current_page' => $logins->currentPage(),
+                'last_page' => $logins->lastPage(),
+                'per_page' => $logins->perPage(),
+                'total' => $logins->total(),
+            ],
         ]);
     }
 
@@ -216,13 +220,14 @@ class DashboardController extends Controller
     }
 
     /**
-     * Lấy danh sách danh mục user đã mua theo tháng/năm
+     * Lấy danh sách danh mục user đã mua theo tháng/năm có phân trang
      */
     public function userPurchasedCategories(Request $request): JsonResponse
     {
         $user = $request->user();
         $month = $request->input('month', date('m'));
         $year = $request->input('year', date('Y'));
+        $perPage = $request->input('per_page', 5);
 
         // Tính from_date và to_date từ month/year (format YYYYMMDD)
         $fromDate = (int) ($year . str_pad($month, 2, '0', STR_PAD_LEFT) . '01');
@@ -240,12 +245,18 @@ class DashboardController extends Controller
             ->selectRaw('SUM(total_charge) as total_spent')
             ->groupBy('services.name')
             ->orderByDesc('total_orders')
-            ->get();
+            ->paginate($perPage);
 
         return response()->json([
             'month' => $month,
             'year' => $year,
-            'data' => $serviceStats,
+            'data' => $serviceStats->items(),
+            'pagination' => [
+                'current_page' => $serviceStats->currentPage(),
+                'last_page' => $serviceStats->lastPage(),
+                'per_page' => $serviceStats->perPage(),
+                'total' => $serviceStats->total(),
+            ],
         ]);
     }
 }
