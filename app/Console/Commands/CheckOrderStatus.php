@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Events\OrderStatusUpdated;
+use App\Events\RefundSuccess;
 use App\Models\Order;
 use App\Models\Dongtien;
 use App\Services\Providers\ProviderFactory;
@@ -138,7 +139,7 @@ class CheckOrderStatus extends Command
             }
 
             // Tạo dòng tiền hoàn
-            Dongtien::createTransaction(
+            $transaction = Dongtien::createTransaction(
                 $user,
                 $refundAmount,
                 Dongtien::TYPE_REFUND,
@@ -148,6 +149,11 @@ class CheckOrderStatus extends Command
                     'payment_method' => 'system',
                 ]
             );
+
+            // Broadcast event hoàn tiền
+            if ($transaction) {
+                event(new RefundSuccess($transaction, $order->id));
+            }
 
             // Cập nhật refund_amount
             $order->update([
