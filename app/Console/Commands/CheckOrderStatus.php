@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Events\OrderStatusUpdated;
 use App\Models\Order;
 use App\Models\Dongtien;
 use App\Services\Providers\ProviderFactory;
@@ -99,7 +100,9 @@ class CheckOrderStatus extends Command
 
         if (!empty($updateData)) {
             $order->update($updateData);
-            echo '1';
+
+            // Broadcast event qua WebSocket
+            event(new OrderStatusUpdated($order));
         }
     }
 
