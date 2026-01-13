@@ -236,11 +236,15 @@ abstract class BaseProvider implements ProviderInterface
     public function mapProviderStatus(string $providerStatus): string
     {
         return match (strtolower($providerStatus)) {
+
             'pending'                                   => 'pending',
             'processing'                                => 'processing',
+            'in_progress'                               => 'in_progress',
             'completed'                                 => 'completed',
             'canceled'                                  => 'canceled',
             'partial'                                   => 'partial',
+            'refunded'                                  => 'refunded',
+            'failed'                                    => 'failed',
             default                                     => 'unknown',
         };
     }
