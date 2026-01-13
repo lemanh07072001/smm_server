@@ -237,9 +237,9 @@ abstract class BaseProvider implements ProviderInterface
     {
         return match (strtolower($providerStatus)) {
             'pending'                                   => 'pending',
-            'in progress', 'inprogress', 'processing'   => 'processing',
-            'completed', 'complete'                     => 'completed',
-            'canceled', 'cancelled', 'refunded'         => 'canceled',
+            'processing'                                => 'processing',
+            'completed'                                 => 'completed',
+            'canceled'                                  => 'canceled',
             'partial'                                   => 'partial',
             default                                     => 'unknown',
         };
