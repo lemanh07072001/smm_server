@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BankAutoController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CategoryGroupController;
 use App\Http\Controllers\Api\CodeTransactionController;
@@ -24,6 +25,9 @@ use Illuminate\Support\Facades\Route;
 | be assigned to the "api" middleware group. Make something great!
 |
 */
+
+// Webhook routes (public - không cần auth)
+Route::post('/webhook/macrodroid', [BankAutoController::class, 'macrodroidWebhook']);
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
