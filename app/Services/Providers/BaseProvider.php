@@ -239,7 +239,7 @@ abstract class BaseProvider implements ProviderInterface
 
             'pending'                                   => 'pending',
             'processing'                                => 'processing',
-            'in_progress'                               => 'in_progress',
+            'in progress'                               => 'in_progress',
             'completed'                                 => 'completed',
             'canceled'                                  => 'canceled',
             'partial'                                   => 'partial',
