@@ -169,13 +169,18 @@ class TraoDoiTuongTacProvider extends BaseProvider
      */
     public function mapProviderStatus(string $providerStatus): string
     {
-        return match (strtolower($providerStatus)) {
-            'pending' => 'pending',
-            'in progress', 'inprogress', 'processing' => 'processing',
-            'completed', 'complete' => 'completed',
-            'canceled', 'cancelled', 'refunded' => 'canceled',
-            'partial' => 'partial',
-            default => 'unknown',
+          return match (strtolower($providerStatus)) {
+
+            'pending'                                   => 'pending',
+            'processing'                                => 'processing',
+            'in progress'                               => 'in_progress',
+            'completed'                                 => 'completed',
+            'canceled'                                  => 'canceled',
+            'partial'                                   => 'partial',
+            'refunded'                                  => 'refunded',
+            'failed'                                    => 'failed',
+            default                                     => 'unknown',
         };
+
     }
 }

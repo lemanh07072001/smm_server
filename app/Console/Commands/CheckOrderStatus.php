@@ -91,11 +91,6 @@ class CheckOrderStatus extends Command
         }
 
         if (!empty($providerStatus)) {
-            Log::info('Status mapping', [
-                'order_id' => $order->id,
-                'provider_status' => $providerStatus,
-                'mapped_status' => $providerService->mapProviderStatus($providerStatus),
-            ]);
             $updateData['status'] = $providerService->mapProviderStatus($providerStatus);
         }
 
