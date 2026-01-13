@@ -3,6 +3,7 @@
 namespace App\Events;
 
 use App\Models\Order;
+use App\Models\Dongtien;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PrivateChannel;
@@ -15,13 +16,18 @@ class OrderStatusUpdated implements ShouldBroadcastNow
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public Order $order;
+    public ?Dongtien $refundTransaction;
 
     /**
      * Create a new event instance.
+     *
+     * @param Order $order
+     * @param Dongtien|null $refundTransaction - Giao dịch hoàn tiền (nếu có)
      */
-    public function __construct(Order $order)
+    public function __construct(Order $order, ?Dongtien $refundTransaction = null)
     {
         $this->order = $order;
+        $this->refundTransaction = $refundTransaction;
     }
 
     /**
@@ -51,7 +57,7 @@ class OrderStatusUpdated implements ShouldBroadcastNow
      */
     public function broadcastWith(): array
     {
-        return [
+        $data = [
             'id' => $this->order->id,
             'status' => $this->order->status,
             'provider_order_id' => $this->order->provider_order_id,
@@ -61,6 +67,19 @@ class OrderStatusUpdated implements ShouldBroadcastNow
             'updated_at' => $this->order->updated_at->toISOString(),
             'message' => $this->getStatusMessage(),
         ];
+
+        // Thêm thông tin refund nếu có
+        if ($this->refundTransaction) {
+            $data['refund'] = [
+                'transaction_id' => $this->refundTransaction->id,
+                'amount' => $this->refundTransaction->amount,
+                'balance_before' => $this->refundTransaction->balance_before,
+                'balance_after' => $this->refundTransaction->balance_after,
+                'noidung' => $this->refundTransaction->noidung,
+            ];
+        }
+
+        return $data;
     }
 
     /**
@@ -68,7 +87,7 @@ class OrderStatusUpdated implements ShouldBroadcastNow
      */
     private function getStatusMessage(): string
     {
-        return match ($this->order->status) {
+        $message = match ($this->order->status) {
             Order::STATUS_IN_PROGRESS => "Đơn hàng #{$this->order->id} đang chạy",
             Order::STATUS_COMPLETED => "Đơn hàng #{$this->order->id} đã hoàn thành",
             Order::STATUS_FAILED => "Đơn hàng #{$this->order->id} thất bại: {$this->order->error_message}",
@@ -76,5 +95,12 @@ class OrderStatusUpdated implements ShouldBroadcastNow
             Order::STATUS_CANCELED => "Đơn hàng #{$this->order->id} đã bị hủy",
             default => "Đơn hàng #{$this->order->id} được cập nhật",
         };
+
+        // Thêm thông tin hoàn tiền vào message nếu có
+        if ($this->refundTransaction) {
+            $message .= ". Hoàn tiền " . number_format($this->refundTransaction->amount) . " VNĐ";
+        }
+
+        return $message;
     }
 }

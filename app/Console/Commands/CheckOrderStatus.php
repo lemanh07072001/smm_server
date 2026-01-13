@@ -3,7 +3,6 @@
 namespace App\Console\Commands;
 
 use App\Events\OrderStatusUpdated;
-use App\Events\RefundSuccess;
 use App\Models\Order;
 use App\Models\Dongtien;
 use App\Services\Providers\ProviderFactory;
@@ -54,7 +53,7 @@ class CheckOrderStatus extends Command
             $statusResponse = $providerService->getOrderStatus($order->provider_order_id);
 
             if ($statusResponse['success']) {
-                $this->updateOrder($order, $statusResponse,$providerService);
+                $this->updateOrder($order, $statusResponse, $providerService);
             }
         } catch (\Exception $e) {
             Log::error('CheckOrderStatus error', [
@@ -69,7 +68,7 @@ class CheckOrderStatus extends Command
     {
         $responseData = $statusResponse['data'] ?? [];
         $providerOrderId = $order->provider_order_id;
-        
+
         // Parse response - có thể có 2 format:
         // 1. {"13674357": {"charge": 0, "status": "Canceled", ...}}
         // 2. {"charge": 0, "status": "Canceled", ...}
@@ -81,6 +80,7 @@ class CheckOrderStatus extends Command
 
         $updateData = [];
         $providerStatus = $statusData['status'] ?? null;
+        $refundTransaction = null;
 
         if (isset($statusData['start_count'])) {
             $updateData['start_count'] = $statusData['start_count'];
@@ -96,7 +96,7 @@ class CheckOrderStatus extends Command
 
         // Nếu status từ provider là "Canceled", hoàn tiền cho user
         if (strtolower($providerStatus) === 'canceled' && $order->status !== Order::STATUS_CANCELED) {
-            $this->refundOrder($order);
+            $refundTransaction = $this->refundOrder($order);
         }
 
         if (!empty($updateData)) {
@@ -110,19 +110,23 @@ class CheckOrderStatus extends Command
                     'user_id' => $order->user_id,
                     'old_status' => $oldStatus,
                     'new_status' => $updateData['status'],
+                    'has_refund' => $refundTransaction !== null,
                 ]);
-                event(new OrderStatusUpdated($order));
+                // Broadcast 1 event duy nhất, kèm refund nếu có
+                event(new OrderStatusUpdated($order, $refundTransaction));
             }
         }
     }
 
     /**
      * Hoàn tiền cho user khi order bị cancel từ provider
+     *
+     * @return Dongtien|null Transaction hoàn tiền nếu thành công
      */
-    private function refundOrder(Order $order): void
+    private function refundOrder(Order $order): ?Dongtien
     {
         if ($order->charge_amount <= 0 || !$order->user) {
-            return;
+            return null;
         }
 
         DB::beginTransaction();
@@ -135,7 +139,7 @@ class CheckOrderStatus extends Command
                 Log::warning('Refund skipped: user not found', [
                     'order_id' => $order->id,
                 ]);
-                return;
+                return null;
             }
 
             // Tạo dòng tiền hoàn
@@ -150,11 +154,6 @@ class CheckOrderStatus extends Command
                 ]
             );
 
-            // Broadcast event hoàn tiền
-            if ($transaction) {
-                event(new RefundSuccess($transaction, $order->id));
-            }
-
             // Cập nhật refund_amount
             $order->update([
                 'refund_amount' => $refundAmount,
@@ -165,12 +164,15 @@ class CheckOrderStatus extends Command
             $this->info("    💰 Hoàn tiền {$refundAmount} cho order #{$order->id}, số dư mới: {$user->balance}");
 
             DB::commit();
+
+            return $transaction;
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error refunding order from provider cancel', [
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
             ]);
+            return null;
         }
     }
 }
