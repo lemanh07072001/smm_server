@@ -99,10 +99,19 @@ class CheckOrderStatus extends Command
         }
 
         if (!empty($updateData)) {
+            $oldStatus = $order->status;
             $order->update($updateData);
 
-            // Broadcast event qua WebSocket
-            event(new OrderStatusUpdated($order));
+            // Chỉ broadcast event khi status thay đổi
+            if (isset($updateData['status']) && $oldStatus !== $updateData['status']) {
+                Log::info('Broadcasting OrderStatusUpdated', [
+                    'order_id' => $order->id,
+                    'user_id' => $order->user_id,
+                    'old_status' => $oldStatus,
+                    'new_status' => $updateData['status'],
+                ]);
+                event(new OrderStatusUpdated($order));
+            }
         }
     }
 
