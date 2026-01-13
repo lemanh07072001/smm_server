@@ -181,6 +181,7 @@ class DashboardController extends Controller
         $user = $request->user();
         $fromDate = $request->input('from_date'); // YYYYMMDD
         $toDate = $request->input('to_date');     // YYYYMMDD
+        $perPage = $request->input('per_page', 5);
 
         $query = ReportOrderDaily::where('user_id', $user->id);
 
@@ -199,12 +200,18 @@ class DashboardController extends Controller
             ->groupBy('service_id')
             ->with('service:id,name,category_group_id,group_id,sell_rate')
             ->orderByDesc('total_orders')
-            ->get();
+            ->paginate($perPage);
 
         return response()->json([
             'from_date' => $fromDate,
             'to_date' => $toDate,
-            'data' => $services,
+            'data' => $services->items(),
+            'pagination' => [
+                'current_page' => $services->currentPage(),
+                'last_page' => $services->lastPage(),
+                'per_page' => $services->perPage(),
+                'total' => $services->total(),
+            ],
         ]);
     }
 
