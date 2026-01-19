@@ -217,7 +217,7 @@ class UserController extends Controller
         );
 
         // Tạo record bank_auto khi cộng/trừ tiền thủ công
-        if ($type === Dongtien::TYPE_DEPOSIT || $type === Dongtien::TYPE_CHARGE) {
+        if ($type === Dongtien::TYPE_DEPOSIT || $type === 'withdraw') {
             BankAuto::create([
                 'tid' => 'MANUAL_' . time() . '_' . $user->id,
                 'description' => $note,
