@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Route;
 
 // Webhook routes (public - không cần auth)
 Route::post('/webhook/macrodroid', [BankAutoController::class, 'macrodroidWebhook']);
+Route::post('/webhook/macrodroid/test', [BankAutoController::class, 'testWebhook']);
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
+use App\Models\BankAuto;
 use App\Models\Dongtien;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -166,7 +167,7 @@ class UserController extends Controller
     {
         $request->validate([
             'amount' => ['required', 'numeric', 'gt:0'],
-            'type' => ['required', 'string', 'in:deposit,charge,refund,adjustment'],
+            'type' => ['required', 'string', 'in:deposit,charge,refund,adjustment,withdraw'],
             'is_credit' => ['nullable', 'boolean'],
             'payment_method' => ['nullable', 'string', 'max:50'],
             'payment_ref' => ['nullable', 'string', 'max:100'],
@@ -176,7 +177,7 @@ class UserController extends Controller
             'amount.numeric' => 'Số tiền phải là số.',
             'amount.gt' => 'Số tiền phải lớn hơn 0.',
             'type.required' => 'Loại giao dịch là bắt buộc.',
-            'type.in' => 'Loại giao dịch phải là: deposit, charge, refund, adjustment.',
+            'type.in' => 'Loại giao dịch phải là: deposit, charge, refund, adjustment, withdraw.',
         ]);
 
         $user = User::findOrFail($id);
@@ -186,7 +187,7 @@ class UserController extends Controller
         // Xác định đây là giao dịch cộng hay trừ
         $isCredit = match ($type) {
             Dongtien::TYPE_DEPOSIT, Dongtien::TYPE_REFUND => true,
-            Dongtien::TYPE_CHARGE => false,
+            Dongtien::TYPE_CHARGE, 'withdraw' => false,
             default => $request->input('is_credit', true), // adjustment mặc định là cộng
         };
 
@@ -201,7 +202,7 @@ class UserController extends Controller
             ], 422);
         }
 
-        $note = $request->note ?? ($isCredit ? 'Admin cộng tiền' : 'Admin trừ tiền');
+        $note = $request->note ?? ($isCredit ? 'CTV cộng tiền' : 'CTV trừ tiền');
 
         $dongtien = Dongtien::createTransaction(
             $user,
@@ -214,6 +215,26 @@ class UserController extends Controller
                 'payment_ref' => $request->payment_ref,
             ]
         );
+
+        // Tạo record bank_auto khi cộng/trừ tiền thủ công
+        if ($type === Dongtien::TYPE_DEPOSIT || $type === Dongtien::TYPE_CHARGE) {
+            BankAuto::create([
+                'tid' => 'MANUAL_' . time() . '_' . $user->id,
+                'description' => $note,
+                'date' => now()->format('d/m/Y'),
+                'data' => json_encode([
+                    'admin_id' => $request->user()->id,
+                    'admin_name' => $request->user()->name,
+                ]),
+                'amount' => $isCredit ? (int) $amount : (int) -$amount,
+                'user_id' => $user->id,
+                'transaction_type' => $isCredit ? 'PLUS' : 'MINUS',
+                'type' => 'bank',
+                'status' => 'success',
+                'note' => $note,
+                'deposit_type' => 'manual',
+            ]);
+        }
 
         return response()->json([
             'message' => $isCredit ? 'Cộng tiền thành công.' : 'Trừ tiền thành công.',

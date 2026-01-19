@@ -338,4 +338,53 @@ class BankAutoController extends Controller
             Log::error('Error cleaning up transaction code', ['error' => $e->getMessage()]);
         }
     }
+
+    /**
+     * Endpoint test webhook Macrodroid (không thực sự nạp tiền)
+     *
+     * POST /api/webhook/macrodroid/test
+     */
+    public function testWebhook(Request $request): JsonResponse
+    {
+        $sms = $request->input('sms', '');
+        $amount = $request->input('amount');
+        $transactionId = $request->input('transaction_id');
+
+        // Parse amount từ SMS nếu không được cung cấp
+        $parsedAmount = $amount ?: $this->parseAmountFromSms($sms);
+
+        // Tìm user từ mã giao dịch trong SMS
+        $userId = $this->findUserFromSms($sms);
+        $user = $userId ? \App\Models\User::find($userId) : null;
+
+        // Tìm transaction code trong SMS
+        $transactionCode = null;
+        if (preg_match('/smm\d{8}.{6}\d+/i', $sms, $matches)) {
+            $transactionCode = $matches[0];
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Test webhook - Không thực sự nạp tiền',
+            'parsed_data' => [
+                'sms' => $sms,
+                'amount_input' => $amount,
+                'amount_parsed' => $parsedAmount,
+                'transaction_id' => $transactionId ?: 'MD' . date('YmdHis') . rand(1000, 9999),
+                'transaction_code_found' => $transactionCode,
+                'user_id' => $userId,
+                'user_found' => $user ? [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'balance' => $user->balance,
+                ] : null,
+            ],
+            'validation' => [
+                'has_amount' => $parsedAmount > 0,
+                'has_user' => $userId !== null,
+                'would_succeed' => $parsedAmount > 0 && $userId !== null,
+            ],
+        ]);
+    }
 }
