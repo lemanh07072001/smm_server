@@ -102,7 +102,8 @@ class Service extends Model
     ];
 
     public const COMMENT_FORM = [
-        'fb_comment'
+        'fb_comment',
+        'fb_share_content'
     ];
 
     protected $fillable = [
