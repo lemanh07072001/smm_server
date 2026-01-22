@@ -14,7 +14,7 @@ class Dongtien extends Model
 
     // Type constants
     public const TYPE_DEPOSIT = 'deposit';       // Nạp tiền (cộng tiền)
-    public const TYPE_CHARGE = 'withdraw';         // Mua hàng (trừ tiền)
+    public const TYPE_CHARGE = 'charge';           // Mua hàng (trừ tiền)
     public const TYPE_REFUND = 'refund';         // Hoàn tiền (cộng tiền)
     public const TYPE_ADJUSTMENT = 'adjustment'; // Điều chỉnh (cộng/trừ tùy is_credit)
 
