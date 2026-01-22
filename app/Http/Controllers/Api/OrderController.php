@@ -25,7 +25,7 @@ class OrderController extends Controller
     public function index(Request $request): JsonResponse
     {
         $limit = $request->input('limit', 10);
-        $page = $request->input('page', 1);
+        $page = $request->input('page', 5);
         $search = $request->input('search');
         $status = $request->input('status');
         $userId = $request->input('user_id');
