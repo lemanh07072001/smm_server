@@ -24,14 +24,8 @@ class OrderController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $limit = $request->input('limit', 10);
-        $page = $request->input('page', 5);
         $search = $request->input('search');
         $status = $request->input('status');
-        $userId = $request->input('user_id');
-        $serviceId = $request->input('service_id');
-        $providerServiceId = $request->input('provider_service_id');
-        $isFinalized = $request->input('is_finalized');
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
 
@@ -58,7 +52,6 @@ class OrderController extends Controller
             $query->where('status', $status);
         }
 
-
         // Filter theo ngày bắt đầu
         if ($startDate) {
             $query->whereDate('created_at', '>=', $startDate);
@@ -69,20 +62,11 @@ class OrderController extends Controller
             $query->whereDate('created_at', '<=', $endDate);
         }
 
-        $total = $query->count();
-        $totalPages = (int) ceil($total / $limit);
+        // Phân trang
+        $perPage = $request->get('per_page', 10);
+        $orders = $query->paginate($perPage);
 
-        $orders = $query->skip(($page - 1) * $limit)
-            ->take($limit)
-            ->get();
-
-        return response()->json([
-            'data' => $orders,
-            'total' => $total,
-            'page' => (int) $page,
-            'limit' => (int) $limit,
-            'totalPages' => $totalPages,
-        ]);
+        return response()->json($orders);
     }
 
     /**
