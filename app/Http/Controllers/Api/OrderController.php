@@ -76,7 +76,7 @@ class OrderController extends Controller
     {
         $search = $request->input('search');
         $status = $request->input('status');
-        $perPage = $request->input('per_page', 1);
+        $perPage = $request->input('per_page', 10);
 
         // Query orders của user
         $query = Order::with(['service','user'])
