@@ -19,7 +19,7 @@ class DongtienController extends Controller
             ->select(['id', 'balance_before', 'amount', 'balance_after', 'type', 'thoigian', 'noidung', 'payment_method']);
 
         // Filter theo type: deposit, charge, refund, adjustment
-        if ($request->has('type') && in_array($request->type, ['deposit', 'charge', 'refund', 'adjustment'])) {
+        if ($request->has('type') && in_array($request->type, ['deposit', 'charge', 'refund', 'adjustment','withdraw'])) {
             $query->where('type', $request->type);
         }
 
