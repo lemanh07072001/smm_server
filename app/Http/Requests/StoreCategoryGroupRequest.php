@@ -18,6 +18,18 @@ class StoreCategoryGroupRequest extends FormRequest
                 'is_active' => filter_var($this->is_active, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $this->is_active,
             ]);
         }
+
+        if ($this->has('group_id') && is_string($this->group_id) && $this->group_id !== '') {
+            $this->merge([
+                'group_id' => (int) $this->group_id,
+            ]);
+        }
+
+        if ($this->has('category_id') && is_string($this->category_id) && $this->category_id !== '') {
+            $this->merge([
+                'category_id' => (int) $this->category_id,
+            ]);
+        }
     }
 
     public function rules(): array
