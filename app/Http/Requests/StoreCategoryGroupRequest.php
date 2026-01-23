@@ -28,6 +28,9 @@ class StoreCategoryGroupRequest extends FormRequest
             'image' => ['nullable', 'image', 'max:2048'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
+            'group_id' => ['nullable', 'integer'],
+            'category_id' => ['nullable', 'integer'],
+            'description' => ['nullable', 'string', 'max:1000'],
         ];
     }
 
