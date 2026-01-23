@@ -133,12 +133,6 @@ class ServiceController extends Controller
         $categoryGroups = CategoryGroup::where('is_active', 1)
             ->orderBy('sort_order', 'asc')
             ->orderBy('name', 'asc')
-            ->with(['services' => function ($query) {
-                $query->where('is_active', 1)
-                    ->with(['categoryGroup', 'providerService'])
-                    ->orderBy('sort_order', 'asc')
-                    ->orderBy('name', 'asc');
-            }])
             ->get();
 
         return response()->json([
