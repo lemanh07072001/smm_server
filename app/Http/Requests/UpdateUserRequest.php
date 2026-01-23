@@ -22,6 +22,12 @@ class UpdateUserRequest extends FormRequest
                 'is_active' => filter_var($this->is_active, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $this->is_active,
             ]);
         }
+
+        if ($this->has('role') && is_string($this->role)) {
+            $this->merge([
+                'role' => (int) $this->role,
+            ]);
+        }
     }
 
     /**
