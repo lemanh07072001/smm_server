@@ -19,12 +19,6 @@ class StoreCategoryGroupRequest extends FormRequest
             ]);
         }
 
-        if ($this->has('group_id') && is_string($this->group_id) && $this->group_id !== '') {
-            $this->merge([
-                'group_id' => (int) $this->group_id,
-            ]);
-        }
-
         if ($this->has('category_id') && is_string($this->category_id) && $this->category_id !== '') {
             $this->merge([
                 'category_id' => (int) $this->category_id,
@@ -40,7 +34,7 @@ class StoreCategoryGroupRequest extends FormRequest
             'image' => ['nullable', 'image', 'max:2048'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
-            'group_id' => ['nullable', 'integer'],
+            'group_id' => ['nullable', 'string', 'max:100'],
             'category_id' => ['nullable', 'integer'],
             'description' => ['nullable', 'string', 'max:1000'],
         ];

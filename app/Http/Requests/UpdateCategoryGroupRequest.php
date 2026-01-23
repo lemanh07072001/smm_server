@@ -20,12 +20,6 @@ class UpdateCategoryGroupRequest extends FormRequest
             ]);
         }
 
-        if ($this->has('group_id') && is_string($this->group_id) && $this->group_id !== '') {
-            $this->merge([
-                'group_id' => (int) $this->group_id,
-            ]);
-        }
-
         if ($this->has('category_id') && is_string($this->category_id) && $this->category_id !== '') {
             $this->merge([
                 'category_id' => (int) $this->category_id,
@@ -35,8 +29,6 @@ class UpdateCategoryGroupRequest extends FormRequest
 
     public function rules(): array
     {
-        $id = $this->route('id');
-
         return [
             'name' => ['sometimes', 'string', 'max:100'],
             'icon' => ['nullable', 'string', 'max:255'],
@@ -44,7 +36,7 @@ class UpdateCategoryGroupRequest extends FormRequest
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
             'category_id' => ['nullable', 'integer'],
-            'group_id' => ['nullable', 'integer'],
+            'group_id' => ['nullable', 'string', 'max:100'],
             'description' => ['nullable', 'string'],
         ];
     }
