@@ -62,11 +62,36 @@ class OrderController extends Controller
             $query->whereDate('created_at', '<=', $endDate);
         }
 
+        // Thống kê số lượng từng trạng thái
+        $statusCountsRaw = Order::selectRaw('status, COUNT(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status')
+            ->toArray();
+
+        $statusCounts = [
+            'all' => array_sum($statusCountsRaw),
+            'pending' => $statusCountsRaw['pending'] ?? 0,
+            'processing' => $statusCountsRaw['processing'] ?? 0,
+            'in_progress' => $statusCountsRaw['in_progress'] ?? 0,
+            'completed' => $statusCountsRaw['completed'] ?? 0,
+            'partial' => $statusCountsRaw['partial'] ?? 0,
+            'canceled' => $statusCountsRaw['canceled'] ?? 0,
+            'refunded' => $statusCountsRaw['refunded'] ?? 0,
+            'failed' => $statusCountsRaw['failed'] ?? 0,
+        ];
+
         // Phân trang
         $perPage = $request->get('per_page', 10);
         $orders = $query->paginate($perPage);
 
-        return response()->json($orders);
+        return response()->json([
+            'data' => $orders->items(),
+            'current_page' => $orders->currentPage(),
+            'per_page' => $orders->perPage(),
+            'total' => $orders->total(),
+            'last_page' => $orders->lastPage(),
+            'status_counts' => $statusCounts,
+        ]);
     }
 
     /**
