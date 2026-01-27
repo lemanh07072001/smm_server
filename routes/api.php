@@ -105,6 +105,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Orders
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/user/{userId}', [OrderController::class, 'getOrdersByUser']);
+    Route::get('/orders/{orderId}/logs', [OrderController::class, 'getOrderLogs']);
     Route::post('/add-order', [OrderController::class, 'addOrder']);
     Route::post('/orders/{orderId}/cancel', [OrderController::class, 'cancelOrder']);
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Order;
+use App\Models\OrderActivityLog;
 use App\Models\Service;
 use App\Models\Dongtien;
 use App\Models\ReportOrderDaily;
@@ -490,5 +491,19 @@ class OrderController extends Controller
             'message' => $message,
             'status' => 'FAILED',
         ], $statusCode);
+    }
+
+    /**
+     * Lấy activity logs của order từ MongoDB
+     */
+    public function getOrderLogs(int $orderId): JsonResponse
+    {
+        $logs = OrderActivityLog::getByOrderId($orderId);
+
+        return response()->json([
+            'order_id' => $orderId,
+            'total' => $logs->count(),
+            'data' => $logs,
+        ]);
     }
 }
