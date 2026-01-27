@@ -144,4 +144,21 @@ class CategoryGroupController extends Controller
             'data' => $query->get(),
         ]);
     }
+
+    public function getAll(Request $request): JsonResponse
+    {
+        $query = CategoryGroup::where('is_active', 1)
+            ->orderBy('sort_order', 'asc')
+            ->orderBy('name', 'asc')
+            ->with(['services' => function ($q) {
+                $q->where('is_active', 1)
+                    ->orderBy('sort_order', 'asc')
+                    ->orderBy('name', 'asc')
+                    ->with('providerService');
+            }]);
+
+        return response()->json([
+            'data' => $query->get(),
+        ]);
+    }
 }

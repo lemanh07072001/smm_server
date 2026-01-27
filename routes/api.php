@@ -12,6 +12,8 @@ use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ProviderController;
 use App\Http\Controllers\Api\ProviderServiceController;
 use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\SupportMessageController;
+use App\Http\Controllers\Api\SupportTicketController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -36,6 +38,7 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/categories/all', [CategoryController::class, 'all']);
 Route::get('/category-groups/all', [CategoryGroupController::class, 'all']);
+Route::get('/category-groups/get-all', [CategoryGroupController::class, 'getAll']);
 Route::get('/services/all', [ServiceController::class, 'all']);
 Route::get('/services/form-types', [ServiceController::class, 'formTypes']);
 Route::post('/get-providers', [ProviderController::class, 'getProvider']);
@@ -128,5 +131,19 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/recent-logins', [DashboardController::class, 'recentLogins']);
     Route::get('/dashboard/purchased-services', [DashboardController::class, 'userPurchasedServices']);
     Route::get('/dashboard/purchased-categories', [DashboardController::class, 'userPurchasedCategories']);
+
+    // Support Tickets
+    Route::get('/support-tickets', [SupportTicketController::class, 'index']);
+    Route::post('/support-tickets', [SupportTicketController::class, 'store']);
+    Route::get('/support-tickets/{id}', [SupportTicketController::class, 'show']);
+    Route::post('/support-tickets/{id}/close', [SupportTicketController::class, 'close']);
+    Route::post('/support-tickets/{id}/reopen', [SupportTicketController::class, 'reopen']);
+    Route::post('/support-tickets/{id}/assign', [SupportTicketController::class, 'assign']);
+
+    // Support Messages
+    Route::get('/support-tickets/{ticketId}/messages', [SupportMessageController::class, 'index']);
+    Route::post('/support-tickets/{ticketId}/messages', [SupportMessageController::class, 'store']);
+    Route::post('/support-tickets/{ticketId}/read', [SupportMessageController::class, 'markAsRead']);
+    Route::get('/support-messages/unread-count', [SupportMessageController::class, 'unreadCount']);
 
 });
