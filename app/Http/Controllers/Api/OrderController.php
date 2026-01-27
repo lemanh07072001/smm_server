@@ -93,8 +93,14 @@ class OrderController extends Controller
         $status = $request->input('status');
         $perPage = $request->input('per_page', 10);
 
-        // Query orders của user
-        $query = Order::with(['service','user'])
+        // Query orders của user - chỉ select cột cần thiết
+        $query = Order::select([
+                'id', 'user_id', 'service_id', 'provider_service_id',
+                'provider_order_id', 'link', 'quantity', 'status',
+                'charge_amount', 'start_count', 'remains',
+                'created_at', 'updated_at'
+            ])
+            ->with(['service:id,name,sell_rate'])
             ->where('user_id', $userId);
 
         // Filter theo status (nếu status là "all" thì lấy tất cả)
@@ -102,53 +108,23 @@ class OrderController extends Controller
             $query->where('status', $status);
         }
 
-        // Tìm kiếm theo link, provider_order_id hoặc tên service
+        // Tìm kiếm theo link, provider_order_id
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('link', 'like', "%{$search}%")
-                  ->orWhere('provider_order_id', 'like', "%{$search}%")
-                  ->orWhereHas('service', function ($serviceQuery) use ($search) {
-                      $serviceQuery->where('name', 'like', "%{$search}%");
-                  });
+                  ->orWhere('provider_order_id', 'like', "%{$search}%");
             });
         }
 
-        // Phân trang
-        $page = $request->input('page', 1);
-        $total = $query->count();
-        $totalPages = (int) ceil($total / $perPage);
-
-        $orders = $query->orderBy('created_at', 'desc')
-            ->skip(($page - 1) * $perPage)
-            ->take($perPage)
-            ->get();
-
-        // // Thống kê số lượng từng trạng thái
-        // $statusCountsRaw = Order::where('user_id', $userId)
-        //     ->selectRaw('status, COUNT(*) as count')
-        //     ->groupBy('status')
-        //     ->pluck('count', 'status')
-        //     ->toArray();
-
-        // // Khởi tạo tất cả status với giá trị 0
-        // $statusCounts = [
-        //     'pending' => $statusCountsRaw['pending'] ?? 0,
-        //     'processing' => $statusCountsRaw['processing'] ?? 0,
-        //     'in_progress' => $statusCountsRaw['in_progress'] ?? 0,
-        //     'completed' => $statusCountsRaw['completed'] ?? 0,
-        //     'partial' => $statusCountsRaw['partial'] ?? 0,
-        //     'canceled' => $statusCountsRaw['canceled'] ?? 0,
-        //     'refunded' => $statusCountsRaw['refunded'] ?? 0,
-        //     'failed' => $statusCountsRaw['failed'] ?? 0,
-        // ];
+        // Dùng paginate thay vì count + skip/take
+        $orders = $query->orderBy('id', 'desc')->paginate($perPage);
 
         return response()->json([
-            'data' => $orders,
-            'total' => $total,
-            'page' => (int) $page,
-            'limit' => (int) $perPage,
-            'totalPages' => $totalPages,
-            // 'status_counts' => $statusCounts,
+            'data' => $orders->items(),
+            'total' => $orders->total(),
+            'page' => $orders->currentPage(),
+            'limit' => $orders->perPage(),
+            'totalPages' => $orders->lastPage(),
         ]);
     }
 
