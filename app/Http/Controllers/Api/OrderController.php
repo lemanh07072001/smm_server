@@ -30,21 +30,25 @@ class OrderController extends Controller
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
 
-        $query = Order::with(['user', 'service', 'providerService'])
-            ->orderBy('created_at', 'desc');
+        $query = Order::select([
+                'id', 'user_id', 'service_id', 'provider_service_id',
+                'provider_order_id', 'link', 'quantity', 'status',
+                'charge_amount', 'cost_amount', 'profit_amount',
+                'start_count', 'remains', 'error_message',
+                'created_at', 'updated_at'
+            ])
+            ->with([
+                'user:id,name,email',
+                'service:id,name,sell_rate',
+                'providerService:id,name,provider_service_code',
+            ]);
 
-        // Search theo link hoặc provider_order_id
+        // Search theo link, provider_order_id
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('link', 'like', "%{$search}%")
                   ->orWhere('provider_order_id', 'like', "%{$search}%")
-                  ->orWhereHas('user', function ($userQuery) use ($search) {
-                      $userQuery->where('name', 'like', "%{$search}%")
-                                ->orWhere('email', 'like', "%{$search}%");
-                  })
-                  ->orWhereHas('service', function ($serviceQuery) use ($search) {
-                      $serviceQuery->where('name', 'like', "%{$search}%");
-                  });
+                  ->orWhere('id', $search);
             });
         }
 
@@ -52,27 +56,36 @@ class OrderController extends Controller
         if ($status !== null) {
             $query->where('status', $status);
         }
-        // Thống kê số lượng từng trạng thái
-        // $statusCountsRaw = Order::selectRaw('status, COUNT(*) as count')
-        //     ->groupBy('status')
-        //     ->pluck('count', 'status')
-        //     ->toArray();
 
-        // $statusCounts = [
-        //     'all' => array_sum($statusCountsRaw),
-        //     'pending' => $statusCountsRaw['pending'] ?? 0,
-        //     'processing' => $statusCountsRaw['processing'] ?? 0,
-        //     'in_progress' => $statusCountsRaw['in_progress'] ?? 0,
-        //     'completed' => $statusCountsRaw['completed'] ?? 0,
-        //     'partial' => $statusCountsRaw['partial'] ?? 0,
-        //     'canceled' => $statusCountsRaw['canceled'] ?? 0,
-        //     'refunded' => $statusCountsRaw['refunded'] ?? 0,
-        //     'failed' => $statusCountsRaw['failed'] ?? 0,
-        // ];
+        // Filter theo ngày
+        if ($startDate) {
+            $query->whereDate('created_at', '>=', $startDate);
+        }
+        if ($endDate) {
+            $query->whereDate('created_at', '<=', $endDate);
+        }
 
-        // Phân trang
-        $perPage = $request->get('per_page', 10);
-        $orders = $query->paginate($perPage);
+        // Thống kê số lượng từng trạng thái (1 query nhẹ dùng index status)
+        $statusCountsRaw = Order::selectRaw('status, COUNT(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status')
+            ->toArray();
+
+        $statusCounts = [
+            'all' => array_sum($statusCountsRaw),
+            'pending' => $statusCountsRaw['pending'] ?? 0,
+            'processing' => $statusCountsRaw['processing'] ?? 0,
+            'in_progress' => $statusCountsRaw['in_progress'] ?? 0,
+            'completed' => $statusCountsRaw['completed'] ?? 0,
+            'partial' => $statusCountsRaw['partial'] ?? 0,
+            'canceled' => $statusCountsRaw['canceled'] ?? 0,
+            'refunded' => $statusCountsRaw['refunded'] ?? 0,
+            'failed' => $statusCountsRaw['failed'] ?? 0,
+        ];
+
+        // Phân trang - orderBy id nhanh hơn created_at
+        $perPage = $request->get('per_page', 7);
+        $orders = $query->orderBy('id', 'desc')->paginate($perPage);
 
         return response()->json([
             'data' => $orders->items(),
@@ -80,7 +93,7 @@ class OrderController extends Controller
             'per_page' => $orders->perPage(),
             'total' => $orders->total(),
             'last_page' => $orders->lastPage(),
-            // 'status_counts' => $statusCounts,
+            'status_counts' => $statusCounts,
         ]);
     }
 
