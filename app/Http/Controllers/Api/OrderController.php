@@ -123,24 +123,24 @@ class OrderController extends Controller
             ->take($perPage)
             ->get();
 
-        // Thống kê số lượng từng trạng thái
-        $statusCountsRaw = Order::where('user_id', $userId)
-            ->selectRaw('status, COUNT(*) as count')
-            ->groupBy('status')
-            ->pluck('count', 'status')
-            ->toArray();
+        // // Thống kê số lượng từng trạng thái
+        // $statusCountsRaw = Order::where('user_id', $userId)
+        //     ->selectRaw('status, COUNT(*) as count')
+        //     ->groupBy('status')
+        //     ->pluck('count', 'status')
+        //     ->toArray();
 
-        // Khởi tạo tất cả status với giá trị 0
-        $statusCounts = [
-            'pending' => $statusCountsRaw['pending'] ?? 0,
-            'processing' => $statusCountsRaw['processing'] ?? 0,
-            'in_progress' => $statusCountsRaw['in_progress'] ?? 0,
-            'completed' => $statusCountsRaw['completed'] ?? 0,
-            'partial' => $statusCountsRaw['partial'] ?? 0,
-            'canceled' => $statusCountsRaw['canceled'] ?? 0,
-            'refunded' => $statusCountsRaw['refunded'] ?? 0,
-            'failed' => $statusCountsRaw['failed'] ?? 0,
-        ];
+        // // Khởi tạo tất cả status với giá trị 0
+        // $statusCounts = [
+        //     'pending' => $statusCountsRaw['pending'] ?? 0,
+        //     'processing' => $statusCountsRaw['processing'] ?? 0,
+        //     'in_progress' => $statusCountsRaw['in_progress'] ?? 0,
+        //     'completed' => $statusCountsRaw['completed'] ?? 0,
+        //     'partial' => $statusCountsRaw['partial'] ?? 0,
+        //     'canceled' => $statusCountsRaw['canceled'] ?? 0,
+        //     'refunded' => $statusCountsRaw['refunded'] ?? 0,
+        //     'failed' => $statusCountsRaw['failed'] ?? 0,
+        // ];
 
         return response()->json([
             'data' => $orders,
@@ -148,7 +148,7 @@ class OrderController extends Controller
             'page' => (int) $page,
             'limit' => (int) $perPage,
             'totalPages' => $totalPages,
-            'status_counts' => $statusCounts,
+            // 'status_counts' => $statusCounts,
         ]);
     }
 
