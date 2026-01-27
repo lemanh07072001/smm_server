@@ -116,6 +116,25 @@ class OrderController extends Controller
             });
         }
 
+        // Thống kê số lượng từng trạng thái của user
+        $statusCountsRaw = Order::where('user_id', $userId)
+            ->selectRaw('status, COUNT(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status')
+            ->toArray();
+
+        $statusCounts = [
+            'all' => array_sum($statusCountsRaw),
+            'pending' => $statusCountsRaw['pending'] ?? 0,
+            'processing' => $statusCountsRaw['processing'] ?? 0,
+            'in_progress' => $statusCountsRaw['in_progress'] ?? 0,
+            'completed' => $statusCountsRaw['completed'] ?? 0,
+            'partial' => $statusCountsRaw['partial'] ?? 0,
+            'canceled' => $statusCountsRaw['canceled'] ?? 0,
+            'refunded' => $statusCountsRaw['refunded'] ?? 0,
+            'failed' => $statusCountsRaw['failed'] ?? 0,
+        ];
+
         // Dùng paginate thay vì count + skip/take
         $orders = $query->orderBy('id', 'desc')->paginate($perPage);
 
@@ -125,6 +144,7 @@ class OrderController extends Controller
             'page' => $orders->currentPage(),
             'limit' => $orders->perPage(),
             'totalPages' => $orders->lastPage(),
+            'status_counts' => $statusCounts,
         ]);
     }
 
