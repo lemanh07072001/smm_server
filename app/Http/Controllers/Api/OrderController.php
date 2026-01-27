@@ -91,7 +91,7 @@ class OrderController extends Controller
     {
         $search = $request->input('search');
         $status = $request->input('status');
-        $perPage = $request->input('per_page', 10);
+        $perPage = $request->input('per_page', 7);
 
         // Query orders của user - chỉ select cột cần thiết
         $query = Order::select([
