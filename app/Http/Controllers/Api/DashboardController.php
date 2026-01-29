@@ -259,4 +259,44 @@ class DashboardController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Lấy tổng hợp thống kê toàn hệ thống
+     * - Tổng đơn hàng theo status
+     * - Tổng doanh thu, cost, tiền nạp
+     */
+    public function totalStats(): JsonResponse
+    {
+        $orderStats = \App\Models\Order::selectRaw('
+            COUNT(*) as total_orders,
+            SUM(CASE WHEN status = "completed" THEN 1 ELSE 0 END) as completed_orders,
+            SUM(CASE WHEN status IN ("in_progress", "processing") THEN 1 ELSE 0 END) as running_orders,
+            SUM(CASE WHEN status = "partial" THEN 1 ELSE 0 END) as partial_orders,
+            SUM(CASE WHEN status IN ("canceled", "failed") THEN 1 ELSE 0 END) as canceled_orders,
+            SUM(charge_amount) as total_revenue,
+            SUM(cost_amount) as total_cost,
+            SUM(profit_amount) as total_profit
+        ')->first();
+
+        $depositTotal = Dongtien::where('type', Dongtien::TYPE_DEPOSIT)
+            ->sum('amount');
+
+        return response()->json([
+            'data' => [
+                'orders' => [
+                    'total' => $orderStats->total_orders ?? 0,
+                    'completed' => $orderStats->completed_orders ?? 0,
+                    'running' => $orderStats->running_orders ?? 0,
+                    'partial' => $orderStats->partial_orders ?? 0,
+                    'canceled' => $orderStats->canceled_orders ?? 0,
+                ],
+                'financial' => [
+                    'total_revenue' => (float) ($orderStats->total_revenue ?? 0),
+                    'total_cost' => (float) ($orderStats->total_cost ?? 0),
+                    'total_profit' => (float) ($orderStats->total_profit ?? 0),
+                    'total_deposit' => (float) $depositTotal,
+                ],
+            ],
+        ]);
+    }
 }

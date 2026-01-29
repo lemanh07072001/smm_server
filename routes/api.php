@@ -133,6 +133,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/dashboard/today', [DashboardController::class, 'today']);
     Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
+    Route::get('/dashboard/total-stats', [DashboardController::class, 'totalStats']);
     Route::get('/dashboard/user', [DashboardController::class, 'userStats']);
     Route::get('/dashboard/recent-logins', [DashboardController::class, 'recentLogins']);
     Route::get('/dashboard/purchased-services', [DashboardController::class, 'userPurchasedServices']);
