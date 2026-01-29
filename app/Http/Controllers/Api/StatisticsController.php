@@ -22,17 +22,19 @@ class StatisticsController extends Controller
             $today = Carbon::today();
             $yesterday = Carbon::yesterday();
 
-            // Calculate date ranges in YYYYMMDD format
-            $yesterdayDate = (int) $yesterday->format('Ymd');
-            $last7DaysDate = (int) $today->copy()->subDays(7)->format('Ymd');
-            $last30DaysDate = (int) $today->copy()->subDays(30)->format('Ymd');
-            $todayDate = (int) $today->format('Ymd');
+            // Calculate date ranges as timestamps
+            $yesterdayStart = $yesterday->startOfDay()->timestamp;
+            $yesterdayEnd = $yesterday->endOfDay()->timestamp;
+            $last7DaysStart = $today->copy()->subDays(7)->startOfDay()->timestamp;
+            $last30DaysStart = $today->copy()->subDays(30)->startOfDay()->timestamp;
+            $todayStart = $today->startOfDay()->timestamp;
 
             $data = [];
 
             // If no period specified or period is 'yesterday', include yesterday stats
             if (!$period || $period === 'yesterday') {
-                $yesterdayStats = ReportOrderDaily::where('date_at', $yesterdayDate)
+                $yesterdayStats = ReportOrderDaily::where('date_at', '>=', $yesterdayStart)
+                    ->where('date_at', '<=', $yesterdayEnd)
                     ->selectRaw('
                         SUM(order_pending) as order_pending,
                         SUM(order_processing) as order_processing,
@@ -80,8 +82,8 @@ class StatisticsController extends Controller
 
             // If no period specified or period is 'last_7_days', include last 7 days stats
             if (!$period || $period === 'last_7_days') {
-                $last7DaysStats = ReportOrderDaily::where('date_at', '>=', $last7DaysDate)
-                    ->where('date_at', '<', $todayDate)
+                $last7DaysStats = ReportOrderDaily::where('date_at', '>=', $last7DaysStart)
+                    ->where('date_at', '<', $todayStart)
                     ->selectRaw('
                         SUM(order_pending) as order_pending,
                         SUM(order_processing) as order_processing,
@@ -130,8 +132,8 @@ class StatisticsController extends Controller
 
             // If no period specified or period is 'last_30_days', include last 30 days stats
             if (!$period || $period === 'last_30_days') {
-                $last30DaysStats = ReportOrderDaily::where('date_at', '>=', $last30DaysDate)
-                    ->where('date_at', '<', $todayDate)
+                $last30DaysStats = ReportOrderDaily::where('date_at', '>=', $last30DaysStart)
+                    ->where('date_at', '<', $todayStart)
                     ->selectRaw('
                         SUM(order_pending) as order_pending,
                         SUM(order_processing) as order_processing,
@@ -202,12 +204,15 @@ class StatisticsController extends Controller
 
             if (!$fromDate || !$toDate) {
                 return response()->json([
-                    'message' => 'from_date and to_date are required (format: YYYYMMDD)'
+                    'message' => 'from_date and to_date are required (format: Y-m-d, example: 2026-01-01)'
                 ], 400);
             }
 
-            $stats = ReportOrderDaily::where('date_at', '>=', (int) $fromDate)
-                ->where('date_at', '<=', (int) $toDate)
+            $fromTimestamp = Carbon::createFromFormat('Y-m-d', $fromDate)->startOfDay()->timestamp;
+            $toTimestamp = Carbon::createFromFormat('Y-m-d', $toDate)->endOfDay()->timestamp;
+
+            $stats = ReportOrderDaily::where('date_at', '>=', $fromTimestamp)
+                ->where('date_at', '<=', $toTimestamp)
                 ->selectRaw('
                     SUM(order_pending) as order_pending,
                     SUM(order_processing) as order_processing,
@@ -236,8 +241,8 @@ class StatisticsController extends Controller
 
             return response()->json([
                 'data' => [
-                    'date_from' => Carbon::createFromFormat('Ymd', $fromDate)->format('Y-m-d'),
-                    'date_to' => Carbon::createFromFormat('Ymd', $toDate)->format('Y-m-d'),
+                    'date_from' => $fromDate,
+                    'date_to' => $toDate,
                     'total_orders' => $totalOrders,
                     'order_completed' => $stats->order_completed ?? 0,
                     'order_pending' => $stats->order_pending ?? 0,
@@ -275,12 +280,15 @@ class StatisticsController extends Controller
 
             if (!$fromDate || !$toDate) {
                 return response()->json([
-                    'message' => 'from_date and to_date are required (format: YYYYMMDD)'
+                    'message' => 'from_date and to_date are required (format: Y-m-d, example: 2026-01-01)'
                 ], 400);
             }
 
-            $dailyStats = ReportOrderDaily::where('date_at', '>=', (int) $fromDate)
-                ->where('date_at', '<=', (int) $toDate)
+            $fromTimestamp = Carbon::createFromFormat('Y-m-d', $fromDate)->startOfDay()->timestamp;
+            $toTimestamp = Carbon::createFromFormat('Y-m-d', $toDate)->endOfDay()->timestamp;
+
+            $dailyStats = ReportOrderDaily::where('date_at', '>=', $fromTimestamp)
+                ->where('date_at', '<=', $toTimestamp)
                 ->selectRaw('
                     date_at,
                     SUM(order_pending) as order_pending,
@@ -311,7 +319,7 @@ class StatisticsController extends Controller
                                   ($stat->order_failed ?? 0);
 
                     return [
-                        'date' => Carbon::createFromFormat('Ymd', (string) $stat->date_at)->format('Y-m-d'),
+                        'date' => Carbon::createFromTimestamp($stat->date_at)->format('Y-m-d'),
                         'total_orders' => $totalOrders,
                         'order_completed' => $stat->order_completed,
                         'order_pending' => $stat->order_pending,
