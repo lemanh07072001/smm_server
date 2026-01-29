@@ -101,7 +101,7 @@ class CheckOrderStatus extends Command
                 Order::STATUS_CANCELED,
                 Order::STATUS_FAILED,
             ])) {
-                $updateData['completed_at'] = now();
+                $updateData['scan'] = 1;
             }
         }
 
