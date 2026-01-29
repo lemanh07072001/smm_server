@@ -17,10 +17,12 @@ class GenerateUserFinancialReport extends Command
     {
         // Lấy các giao dịch chưa được scan
         $transactions = Dongtien::where('scan', 0)
+            ->whereIn('type',[Dongtien::TYPE_DEPOSIT,Dongtien::TYPE_CHARGE,Dongtien::TYPE_REFUND,'withdraw'])
             ->orderBy('id')
             ->cursor();
 
         $userStats = [];
+        $processedTransactionIds = [];
 
         foreach ($transactions as $transaction) {
             $userId = $transaction->user_id;
@@ -59,6 +61,9 @@ class GenerateUserFinancialReport extends Command
                     $userStats[$userId]['total_withdraw'] += abs($transaction->amount);
                     break;
             }
+
+            // Lưu ID để update scan sau
+            $processedTransactionIds[] = $transaction->id;
         }
 
         // Cập nhật hoặc tạo mới báo cáo cho từng user
@@ -96,12 +101,14 @@ class GenerateUserFinancialReport extends Command
             }
         }
 
-        // Đánh dấu các giao dịch đã xử lý
-        foreach ($transactions as $transaction) {
+        // Đánh dấu các giao dịch đã xử lý (bulk update cho hiệu suất tốt hơn)
+        if (!empty($processedTransactionIds)) {
             try {
-                $transaction->update(['scan' => 1]);
+                Dongtien::whereIn('id', $processedTransactionIds)
+                    ->update(['scan' => 1]);
+                $this->info('Processed ' . count($processedTransactionIds) . ' transactions');
             } catch (\Throwable $th) {
-                continue;
+                $this->error('Error marking transactions as scanned: ' . $th->getMessage());
             }
         }
 
