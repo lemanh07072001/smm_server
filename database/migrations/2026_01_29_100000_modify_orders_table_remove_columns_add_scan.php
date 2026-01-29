@@ -12,12 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            // Xóa các cột không cần thiết (chỉ xóa những cột tồn tại)
-            if (Schema::hasColumn('orders', 'scanned_at')) {
-                $table->dropColumn('scanned_at');
-            }
-
-            // Cột scan đã tồn tại, chỉ thêm index nếu chưa có
+            // Thêm index cho cột scan nếu chưa có
             if (!Schema::hasIndex('orders', 'orders_scan_index')) {
                 $table->index('scan');
             }
@@ -33,11 +28,6 @@ return new class extends Migration
             // Xóa index scan nếu tồn tại
             if (Schema::hasIndex('orders', 'orders_scan_index')) {
                 $table->dropIndex(['scan']);
-            }
-
-            // Khôi phục lại cột scanned_at
-            if (!Schema::hasColumn('orders', 'scanned_at')) {
-                $table->timestamp('scanned_at')->nullable()->after('updated_at');
             }
         });
     }
