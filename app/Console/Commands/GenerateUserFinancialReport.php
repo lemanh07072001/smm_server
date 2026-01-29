@@ -30,21 +30,33 @@ class GenerateUserFinancialReport extends Command
                     'total_deposit' => 0,
                     'total_spending' => 0,
                     'total_refund' => 0,
+                    'total_withdraw' => 0,
                 ];
             }
 
             // Tính toán theo loại giao dịch
             switch ($transaction->type) {
                 case Dongtien::TYPE_DEPOSIT:
-                    $userStats[$userId]['total_deposit'] += $transaction->amount;
+                case 'deposit':
+                    // Nạp tiền (cộng tiền)
+                    $userStats[$userId]['total_deposit'] += abs($transaction->amount);
                     break;
 
                 case Dongtien::TYPE_CHARGE:
+                case 'charge':
+                    // Mua hàng (trừ tiền)
                     $userStats[$userId]['total_spending'] += abs($transaction->amount);
                     break;
 
                 case Dongtien::TYPE_REFUND:
-                    $userStats[$userId]['total_refund'] += $transaction->amount;
+                case 'refund':
+                    // Hoàn tiền (cộng tiền)
+                    $userStats[$userId]['total_refund'] += abs($transaction->amount);
+                    break;
+
+                case 'withdraw':
+                    // Rút tiền (trừ tiền)
+                    $userStats[$userId]['total_withdraw'] += abs($transaction->amount);
                     break;
             }
         }
@@ -58,6 +70,7 @@ class GenerateUserFinancialReport extends Command
                 $report->total_deposit += $stats['total_deposit'];
                 $report->total_spending += $stats['total_spending'];
                 $report->total_refund += $stats['total_refund'];
+                $report->total_withdraw += $stats['total_withdraw'];
 
                 // Cập nhật số dư hiện tại từ bảng users
                 $user = \App\Models\User::find($userId);
