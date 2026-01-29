@@ -6,6 +6,7 @@ use App\Console\Commands\CheckBank;
 use App\Console\Commands\CheckOrderStatus;
 use App\Console\Commands\GenerateDashboardReport;
 use App\Console\Commands\GenerateOrderReport;
+use App\Console\Commands\GenerateUserFinancialReport;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
@@ -15,6 +16,7 @@ class Kernel extends ConsoleKernel
         CheckBank::class,
         CheckOrderStatus::class,
         GenerateOrderReport::class,
+        GenerateUserFinancialReport::class,
     ];
 
     /**
@@ -42,7 +44,14 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/order-report.log'));
 
-    
+        // Thống kê tài chính user mỗi 10 phút
+        $schedule->command('report:user-financial')
+            ->runInBackground()
+            ->everyTenMinutes()
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/user-financial-report.log'));
+
+
     }
 
     /**

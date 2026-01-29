@@ -12,12 +12,15 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            // Xóa các cột không cần thiết
-            $table->dropColumn(['completed_at', 'scanned_at', 'old_scanned_status']);
+            // Xóa các cột không cần thiết (chỉ xóa những cột tồn tại)
+            if (Schema::hasColumn('orders', 'scanned_at')) {
+                $table->dropColumn('scanned_at');
+            }
 
-            // Thêm cột scan với index
-            $table->integer('scan')->default(0)->after('updated_at');
-            $table->index('scan');
+            // Cột scan đã tồn tại, chỉ thêm index nếu chưa có
+            if (!Schema::hasIndex('orders', 'orders_scan_index')) {
+                $table->index('scan');
+            }
         });
     }
 
@@ -27,14 +30,15 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            // Xóa cột scan
-            $table->dropIndex(['scan']);
-            $table->dropColumn('scan');
+            // Xóa index scan nếu tồn tại
+            if (Schema::hasIndex('orders', 'orders_scan_index')) {
+                $table->dropIndex(['scan']);
+            }
 
-            // Khôi phục lại các cột đã xóa
-            $table->timestamp('completed_at')->nullable()->after('error_message');
-            $table->timestamp('scanned_at')->nullable()->after('updated_at');
-            $table->string('old_scanned_status', 20)->nullable()->after('scanned_at');
+            // Khôi phục lại cột scanned_at
+            if (!Schema::hasColumn('orders', 'scanned_at')) {
+                $table->timestamp('scanned_at')->nullable()->after('updated_at');
+            }
         });
     }
 };
