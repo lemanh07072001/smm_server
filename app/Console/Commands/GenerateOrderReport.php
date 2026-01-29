@@ -16,8 +16,9 @@ class GenerateOrderReport extends Command
     {
         $date = date("Y-m-d");
 
-        $orders = Order::where('created_at', '>=', "$date 00:00:00")
-            ->where('created_at', '<=', "$date 23:59:59")
+        $orders = Order::whereNotNull('completed_at')
+            ->where('completed_at', '>=', "$date 00:00:00")
+            ->where('completed_at', '<=', "$date 23:59:59")
             ->cursor();
 
         $reports = [];
@@ -39,7 +40,7 @@ class GenerateOrderReport extends Command
 
         foreach ($orders as $order) {
             try {
-                $dateAt = (int) date('Ymd', strtotime($order->created_at));
+                $dateAt = strtotime(date('Y-m-d', strtotime($order->created_at)));
                 $keys = [
                     'date_at' => $dateAt,
                     'user_id' => $order->user_id,
