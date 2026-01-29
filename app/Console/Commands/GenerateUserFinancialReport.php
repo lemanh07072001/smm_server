@@ -26,9 +26,14 @@ class GenerateUserFinancialReport extends Command
 
         foreach ($transactions as $transaction) {
             $userId = $transaction->user_id;
+            // Lấy timestamp đầu ngày (00:00:00) từ created_at của transaction
+            $dateAt = strtotime(date('Y-m-d', strtotime($transaction->created_at)));
+            $key = "{$userId}_{$dateAt}";
 
-            if (!isset($userStats[$userId])) {
-                $userStats[$userId] = [
+            if (!isset($userStats[$key])) {
+                $userStats[$key] = [
+                    'user_id' => $userId,
+                    'date_at' => $dateAt,
                     'total_deposit' => 0,
                     'total_spending' => 0,
                     'total_refund' => 0,
@@ -41,24 +46,24 @@ class GenerateUserFinancialReport extends Command
                 case Dongtien::TYPE_DEPOSIT:
                 case 'deposit':
                     // Nạp tiền (cộng tiền)
-                    $userStats[$userId]['total_deposit'] += abs($transaction->amount);
+                    $userStats[$key]['total_deposit'] += abs($transaction->amount);
                     break;
 
                 case Dongtien::TYPE_CHARGE:
                 case 'charge':
                     // Mua hàng (trừ tiền)
-                    $userStats[$userId]['total_spending'] += abs($transaction->amount);
+                    $userStats[$key]['total_spending'] += abs($transaction->amount);
                     break;
 
                 case Dongtien::TYPE_REFUND:
                 case 'refund':
                     // Hoàn tiền (cộng tiền)
-                    $userStats[$userId]['total_refund'] += abs($transaction->amount);
+                    $userStats[$key]['total_refund'] += abs($transaction->amount);
                     break;
 
                 case 'withdraw':
                     // Rút tiền (trừ tiền)
-                    $userStats[$userId]['total_withdraw'] += abs($transaction->amount);
+                    $userStats[$key]['total_withdraw'] += abs($transaction->amount);
                     break;
             }
 
@@ -66,10 +71,16 @@ class GenerateUserFinancialReport extends Command
             $processedTransactionIds[] = $transaction->id;
         }
 
-        // Cập nhật hoặc tạo mới báo cáo cho từng user
-        foreach ($userStats as $userId => $stats) {
+        // Cập nhật hoặc tạo mới báo cáo cho từng user theo ngày
+        foreach ($userStats as $key => $stats) {
             try {
-                $report = UserFinancialReport::firstOrNew(['user_id' => $userId]);
+                $userId = $stats['user_id'];
+                $dateAt = $stats['date_at'];
+
+                $report = UserFinancialReport::firstOrNew([
+                    'user_id' => $userId,
+                    'date_at' => $dateAt
+                ]);
 
                 // Cộng dồn các giá trị
                 $report->total_deposit += $stats['total_deposit'];
@@ -83,20 +94,9 @@ class GenerateUserFinancialReport extends Command
                     $report->current_balance = $user->balance;
                 }
 
-                // Cập nhật thống kê đơn hàng
-                $orderStats = Order::where('user_id', $userId)
-                    ->selectRaw('
-                        COUNT(*) as total_orders,
-                        SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed_orders
-                    ', [Order::STATUS_COMPLETED])
-                    ->first();
-
-                $report->total_orders = $orderStats->total_orders ?? 0;
-                $report->completed_orders = $orderStats->completed_orders ?? 0;
-
                 $report->save();
             } catch (\Throwable $th) {
-                $this->error("Error updating report for user {$userId}: {$th->getMessage()}");
+                $this->error("Error updating report for user {$userId} on {$dateAt}: {$th->getMessage()}");
                 continue;
             }
         }
