@@ -36,7 +36,7 @@ Route::post('/webhook/macrodroid/test', [BankAutoController::class, 'testWebhook
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/login', [AuthController::class, 'login'])->name('login');
 Route::get('/categories/all', [CategoryController::class, 'all']);
 Route::get('/category-groups/all', [CategoryGroupController::class, 'all']);
 Route::get('/category-groups/get-all', [CategoryGroupController::class, 'getAll']);
@@ -138,6 +138,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/recent-logins', [DashboardController::class, 'recentLogins']);
     Route::get('/dashboard/purchased-services', [DashboardController::class, 'userPurchasedServices']);
     Route::get('/dashboard/purchased-categories', [DashboardController::class, 'userPurchasedCategories']);
+    Route::get('/dashboard/financial-stats', [DashboardController::class, 'financialStats']);
+    Route::get('/dashboard/order-stats', [DashboardController::class, 'orderStats']);
 
     // Support Tickets
     Route::get('/support-tickets', [SupportTicketController::class, 'index']);

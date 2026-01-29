@@ -299,4 +299,84 @@ class DashboardController extends Controller
             ],
         ]);
     }
+
+    /**
+     * API 1: Thống kê chi phí, doanh thu, lợi nhuận
+     * Params: period (today|7days|30days)
+     */
+    public function financialStats(Request $request): JsonResponse
+    {
+        $period = $request->get('period', 'today');
+
+        $query = \App\Models\Order::query();
+
+        // Filter theo thời gian
+        switch ($period) {
+            case 'today':
+                $query->whereDate('created_at', today());
+                break;
+            case '7days':
+                $query->where('created_at', '>=', now()->subDays(7));
+                break;
+            case '30days':
+                $query->where('created_at', '>=', now()->subDays(30));
+                break;
+        }
+
+        $stats = $query->selectRaw('
+            SUM(charge_amount) as total_revenue,
+            SUM(cost_amount) as total_cost,
+            SUM(profit_amount) as total_profit
+        ')->first();
+
+        return response()->json([
+            'period' => $period,
+            'data' => [
+                'revenue' => (float) ($stats->total_revenue ?? 0),
+                'cost' => (float) ($stats->total_cost ?? 0),
+                'profit' => (float) ($stats->total_profit ?? 0),
+            ],
+        ]);
+    }
+
+    /**
+     * API 2: Thống kê đơn hàng theo status
+     * Params: period (today|7days|30days)
+     */
+    public function orderStats(Request $request): JsonResponse
+    {
+        $period = $request->get('period', 'today');
+
+        $query = \App\Models\Order::query();
+
+        // Filter theo thời gian
+        switch ($period) {
+            case 'today':
+                $query->whereDate('created_at', today());
+                break;
+            case '7days':
+                $query->where('created_at', '>=', now()->subDays(7));
+                break;
+            case '30days':
+                $query->where('created_at', '>=', now()->subDays(30));
+                break;
+        }
+
+        $stats = $query->selectRaw('
+            SUM(CASE WHEN status = "completed" THEN 1 ELSE 0 END) as completed,
+            SUM(CASE WHEN status = "partial" THEN 1 ELSE 0 END) as partial,
+            SUM(CASE WHEN status = "canceled" THEN 1 ELSE 0 END) as canceled,
+            SUM(CASE WHEN status = "failed" THEN 1 ELSE 0 END) as failed
+        ')->first();
+
+        return response()->json([
+            'period' => $period,
+            'data' => [
+                'completed' => (int) ($stats->completed ?? 0),
+                'partial' => (int) ($stats->partial ?? 0),
+                'canceled' => (int) ($stats->canceled ?? 0),
+                'failed' => (int) ($stats->failed ?? 0),
+            ],
+        ]);
+    }
 }
