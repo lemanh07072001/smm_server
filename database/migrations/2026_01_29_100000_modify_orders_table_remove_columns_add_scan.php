@@ -16,7 +16,7 @@ return new class extends Migration
             $table->dropColumn(['completed_at', 'scanned_at', 'old_scanned_status']);
 
             // Thêm cột scan với index
-            $table->integer('scan')->default(1)->after('updated_at');
+            $table->integer('scan')->default(0)->after('updated_at');
             $table->index('scan');
         });
     }
