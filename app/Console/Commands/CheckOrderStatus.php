@@ -93,7 +93,16 @@ class CheckOrderStatus extends Command
         if (!empty($providerStatus)) {
             $newStatus = $providerService->mapProviderStatus($providerStatus);
             $updateData['status'] = $newStatus;
-            $updateData['completed_at'] = now();
+
+            // Chỉ update completed_at cho các trạng thái kết thúc
+            if (in_array($newStatus, [
+                Order::STATUS_COMPLETED,
+                Order::STATUS_PARTIAL,
+                Order::STATUS_CANCELED,
+                Order::STATUS_FAILED,
+            ])) {
+                $updateData['completed_at'] = now();
+            }
         }
 
         // Nếu status từ provider là "Canceled", hoàn tiền cho user
