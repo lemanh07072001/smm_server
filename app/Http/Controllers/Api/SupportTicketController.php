@@ -22,6 +22,7 @@ class SupportTicketController extends Controller
     {
         $user = $request->user();
 
+
         $query = SupportTicket::with([
             'user:id,name,email',
             'assignedAdmin:id,name,email',
@@ -141,7 +142,11 @@ class SupportTicketController extends Controller
         $ticket->load(['user:id,name,email', 'latestMessage']);
 
         // Broadcast tin nhắn mới
-        broadcast(new NewSupportMessage($message));
+        try {
+            broadcast(new NewSupportMessage($message));
+        } catch (\Exception) {
+            // Reverb chưa chạy, bỏ qua lỗi broadcast
+        }
 
         return response()->json([
             'message' => 'Tạo ticket hỗ trợ thành công.',
@@ -199,7 +204,10 @@ class SupportTicketController extends Controller
 
         $ticket->close();
 
-        broadcast(new SupportTicketUpdated($ticket));
+        try {
+            broadcast(new SupportTicketUpdated($ticket));
+        } catch (\Exception) {
+        }
 
         return response()->json([
             'message' => 'Đóng ticket thành công.',
@@ -230,7 +238,10 @@ class SupportTicketController extends Controller
 
         $ticket->reopen();
 
-        broadcast(new SupportTicketUpdated($ticket));
+        try {
+            broadcast(new SupportTicketUpdated($ticket));
+        } catch (\Exception) {
+        }
 
         return response()->json([
             'message' => 'Mở lại ticket thành công.',
@@ -266,7 +277,10 @@ class SupportTicketController extends Controller
 
         $ticket->load(['user:id,name,email', 'assignedAdmin:id,name,email']);
 
-        broadcast(new SupportTicketUpdated($ticket));
+        try {
+            broadcast(new SupportTicketUpdated($ticket));
+        } catch (\Exception) {
+        }
 
         return response()->json([
             'message' => 'Assign ticket thành công.',

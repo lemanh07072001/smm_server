@@ -22,22 +22,10 @@ class NewSupportMessage implements ShouldBroadcastNow
 
     public function broadcastOn(): array
     {
-        $channels = [
+        return [
             new PrivateChannel('support.ticket.' . $this->supportMessage->ticket_id),
+            new PrivateChannel('support.admin'),
         ];
-
-        // Gửi notification tới user sở hữu ticket
-        $ticket = $this->supportMessage->ticket;
-        if ($ticket) {
-            $channels[] = new PrivateChannel('user.' . $ticket->user_id);
-
-            // Nếu có admin được assign, gửi notification tới admin đó
-            if ($ticket->assigned_admin_id) {
-                $channels[] = new PrivateChannel('user.' . $ticket->assigned_admin_id);
-            }
-        }
-
-        return $channels;
     }
 
     public function broadcastAs(): string

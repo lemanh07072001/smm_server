@@ -89,6 +89,7 @@ class Order extends Model
         'final_cost' => 'decimal:2',
         'final_profit' => 'decimal:2',
         'is_finalized' => 'boolean',
+        'completed_at' => 'datetime',
     ];
 
     /**

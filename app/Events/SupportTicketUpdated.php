@@ -24,7 +24,6 @@ class SupportTicketUpdated implements ShouldBroadcastNow
     {
         return [
             new PrivateChannel('support.ticket.' . $this->ticket->id),
-            new PrivateChannel('user.' . $this->ticket->user_id),
         ];
     }
 

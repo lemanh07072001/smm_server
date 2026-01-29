@@ -140,6 +140,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/support-tickets/{id}/reopen', [SupportTicketController::class, 'reopen']);
     Route::post('/support-tickets/{id}/assign', [SupportTicketController::class, 'assign']);
 
+    // Support Chat (user)
+    Route::post('/support-chat/send', [SupportMessageController::class, 'chat']);
+    Route::get('/support-chat/history', [SupportMessageController::class, 'chatHistory']);
+
+    // Support Chat (admin)
+    Route::get('/support-chat/admin/conversations', [SupportMessageController::class, 'adminConversations']);
+    Route::post('/support-chat/admin/{ticketId}/reply', [SupportMessageController::class, 'adminReply']);
+
     // Support Messages
     Route::get('/support-tickets/{ticketId}/messages', [SupportMessageController::class, 'index']);
     Route::post('/support-tickets/{ticketId}/messages', [SupportMessageController::class, 'store']);

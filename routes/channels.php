@@ -26,7 +26,11 @@ Broadcast::channel('user.{id}', function ($user, $id) {
 Broadcast::channel('support.ticket.{ticketId}', function ($user, $ticketId) {
     $ticket = \App\Models\SupportTicket::find($ticketId);
     if (!$ticket) return false;
-    // User chỉ vào được ticket của mình, Admin vào được tất cả
     return $user->isAdmin() || (int) $user->id === (int) $ticket->user_id;
+});
+
+// Channel cho admin nhận thông báo từ tất cả cuộc hội thoại support
+Broadcast::channel('support.admin', function ($user) {
+    return $user->isAdmin();
 });
 
