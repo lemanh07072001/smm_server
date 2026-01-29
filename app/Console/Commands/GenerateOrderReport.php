@@ -10,15 +10,17 @@ class GenerateOrderReport extends Command
 {
     protected $signature = 'report:order';
 
-    protected $description = 'Tạo báo cáo thống kê đơn hàng theo ngày hôm nay';
+    protected $description = 'Tạo báo cáo thống kê đơn hàng theo ngày hôm nay từ các đơn hoàn thành chưa scan';
 
     public function handle()
     {
-        $date = date("Y-m-d");
-
-        $orders = Order::whereNotNull('completed_at')
-            ->where('completed_at', '>=', "$date 00:00:00")
-            ->where('completed_at', '<=', "$date 23:59:59")
+        $orders = Order::whereIn('status', [
+                Order::STATUS_COMPLETED,
+                Order::STATUS_PARTIAL,
+                Order::STATUS_CANCELED,
+                Order::STATUS_FAILED,
+            ])
+            ->where('scan', 0)
             ->cursor();
 
         $reports = [];
@@ -83,6 +85,15 @@ class GenerateOrderReport extends Command
                     ['report_key' => $report['report_key']],
                     $report
                 );
+            } catch (\Throwable $th) {
+                continue;
+            }
+        }
+
+        // Cập nhật scan = 1 cho các đơn đã xử lý xong
+        foreach ($orders as $order) {
+            try {
+                $order->update(['scan' => 1]);
             } catch (\Throwable $th) {
                 continue;
             }

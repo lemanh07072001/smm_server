@@ -94,9 +94,10 @@ class CheckOrderStatus extends Command
             $newStatus = $providerService->mapProviderStatus($providerStatus);
             $updateData['status'] = $newStatus;
 
-        // Nếu status từ provider là "Canceled", hoàn tiền cho user
-        if (strtolower($providerStatus) === 'canceled' && $order->status !== Order::STATUS_CANCELED) {
-            $refundTransaction = $this->refundOrder($order);
+            // Nếu status từ provider là "Canceled", hoàn tiền cho user
+            if (strtolower($providerStatus) === 'canceled' && $order->status !== Order::STATUS_CANCELED) {
+                $refundTransaction = $this->refundOrder($order);
+            }
         }
 
         if (!empty($updateData)) {

@@ -65,6 +65,7 @@ class Order extends Model
         'final_profit',
         'is_finalized',
         'error_message',
+        'scan',
     ];
 
     /**
