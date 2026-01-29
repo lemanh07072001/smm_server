@@ -22,9 +22,6 @@ return new class extends Migration
             $table->integer('completed_orders')->default(0)->comment('Số đơn hoàn thành');
             $table->timestamps();
 
-            // Foreign key
-            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-
             // Index
             $table->index('user_id');
         });
