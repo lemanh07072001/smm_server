@@ -17,8 +17,8 @@ class GenerateOrderReport extends Command
         $date = date("Y-m-d");
 
         $orders = Order::whereNotNull('completed_at')
-            ->where('completed_at', '>=', "$date 00:00:00")
-            ->where('completed_at', '<=', "$date 23:59:59")
+            // ->where('completed_at', '>=', "$date 00:00:00")
+            // ->where('completed_at', '<=', "$date 23:59:59")
             ->cursor();
 
         $reports = [];
