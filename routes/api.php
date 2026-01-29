@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ProviderController;
 use App\Http\Controllers\Api\ProviderServiceController;
 use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\StatisticsController;
 use App\Http\Controllers\Api\SupportMessageController;
 use App\Http\Controllers\Api\SupportTicketController;
 use App\Http\Controllers\Api\UserController;
@@ -42,6 +43,11 @@ Route::get('/category-groups/get-all', [CategoryGroupController::class, 'getAll'
 Route::get('/services/all', [ServiceController::class, 'all']);
 Route::get('/services/form-types', [ServiceController::class, 'formTypes']);
 Route::post('/get-providers', [ProviderController::class, 'getProvider']);
+
+// Public Statistics API
+Route::get('/statistics/summary', [StatisticsController::class, 'summary']);
+Route::get('/statistics/revenue', [StatisticsController::class, 'revenue']);
+Route::get('/statistics/daily-breakdown', [StatisticsController::class, 'dailyBreakdown']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
