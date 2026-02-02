@@ -3,13 +3,18 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\ForgotPasswordRequest;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\RegisterRequest;
+use App\Http\Requests\ResetPasswordRequest;
 use App\Models\LoginHistory;
 use App\Models\User;
+use App\Notifications\ResetPasswordNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -186,6 +191,92 @@ class AuthController extends Controller
     {
         return response()->json([
             'user' => $request->user(),
+        ]);
+    }
+
+    /**
+     * Send password reset link to user's email.
+     */
+    public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
+    {
+        $user = User::where('email', $request->email)->first();
+
+        // Delete old tokens for this email
+        DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+
+        // Create new token
+        $token = Str::random(64);
+
+        // Store token in database
+        DB::table('password_reset_tokens')->insert([
+            'email' => $request->email,
+            'token' => Hash::make($token),
+            'created_at' => now(),
+        ]);
+
+        // Send email notification
+        $user->notify(new ResetPasswordNotification($token));
+
+        return response()->json([
+            'message' => 'Link đặt lại mật khẩu đã được gửi đến email của bạn.',
+        ]);
+    }
+
+    /**
+     * Reset user's password.
+     */
+    public function resetPassword(ResetPasswordRequest $request): JsonResponse
+    {
+        // Get token record from database
+        $tokenData = DB::table('password_reset_tokens')
+            ->where('email', $request->email)
+            ->first();
+
+        // Check if token exists
+        if (!$tokenData) {
+            return response()->json([
+                'message' => 'Token không hợp lệ.',
+                'errors' => [
+                    'token' => ['Token không tồn tại hoặc đã hết hạn.'],
+                ],
+            ], 422);
+        }
+
+        // Check if token is expired (60 minutes)
+        if (now()->diffInMinutes($tokenData->created_at) > 60) {
+            DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+
+            return response()->json([
+                'message' => 'Token đã hết hạn.',
+                'errors' => [
+                    'token' => ['Token đã hết hạn, vui lòng yêu cầu đặt lại mật khẩu mới.'],
+                ],
+            ], 422);
+        }
+
+        // Verify token
+        if (!Hash::check($request->token, $tokenData->token)) {
+            return response()->json([
+                'message' => 'Token không hợp lệ.',
+                'errors' => [
+                    'token' => ['Token không chính xác.'],
+                ],
+            ], 422);
+        }
+
+        // Update user's password
+        $user = User::where('email', $request->email)->first();
+        $user->password = Hash::make($request->password);
+        $user->save();
+
+        // Delete token after successful reset
+        DB::table('password_reset_tokens')->where('email', $request->email)->delete();
+
+        // Revoke all existing tokens for security
+        $user->tokens()->delete();
+
+        return response()->json([
+            'message' => 'Mật khẩu đã được đặt lại thành công.',
         ]);
     }
 }

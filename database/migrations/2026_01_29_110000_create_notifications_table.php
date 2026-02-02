@@ -11,16 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('support_attachments', function (Blueprint $table) {
+        Schema::create('notifications', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('message_id');
-            $table->string('file_name', 255);
-            $table->string('file_path', 500);
-            $table->string('file_type', 50);
-            $table->unsignedBigInteger('file_size');
+            $table->string('type')->default('modal');
+            $table->string('title');
+            $table->text('message');
+            $table->string('status')->default('active'); // active, inactive
             $table->timestamps();
-
-            $table->index('message_id');
         });
     }
 
@@ -29,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('support_attachments');
+        Schema::dropIfExists('notifications');
     }
 };

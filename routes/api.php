@@ -8,13 +8,12 @@ use App\Http\Controllers\Api\CodeTransactionController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DepositController;
 use App\Http\Controllers\Api\DongtienController;
+use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ProviderController;
 use App\Http\Controllers\Api\ProviderServiceController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\StatisticsController;
-use App\Http\Controllers\Api\SupportMessageController;
-use App\Http\Controllers\Api\SupportTicketController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -37,6 +36,8 @@ Route::post('/webhook/macrodroid/test', [BankAutoController::class, 'testWebhook
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login'])->name('login');
+Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 Route::get('/categories/all', [CategoryController::class, 'all']);
 Route::get('/category-groups/all', [CategoryGroupController::class, 'all']);
 Route::get('/category-groups/get-all', [CategoryGroupController::class, 'getAll']);
@@ -141,26 +142,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/financial-stats', [DashboardController::class, 'financialStats']);
     Route::get('/dashboard/order-stats', [DashboardController::class, 'orderStats']);
 
-    // Support Tickets
-    Route::get('/support-tickets', [SupportTicketController::class, 'index']);
-    Route::post('/support-tickets', [SupportTicketController::class, 'store']);
-    Route::get('/support-tickets/{id}', [SupportTicketController::class, 'show']);
-    Route::post('/support-tickets/{id}/close', [SupportTicketController::class, 'close']);
-    Route::post('/support-tickets/{id}/reopen', [SupportTicketController::class, 'reopen']);
-    Route::post('/support-tickets/{id}/assign', [SupportTicketController::class, 'assign']);
+    // Notifications (User)
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
 
-    // Support Chat (user)
-    Route::post('/support-chat/send', [SupportMessageController::class, 'chat']);
-    Route::get('/support-chat/history', [SupportMessageController::class, 'chatHistory']);
-
-    // Support Chat (admin)
-    Route::get('/support-chat/admin/conversations', [SupportMessageController::class, 'adminConversations']);
-    Route::post('/support-chat/admin/{ticketId}/reply', [SupportMessageController::class, 'adminReply']);
-
-    // Support Messages
-    Route::get('/support-tickets/{ticketId}/messages', [SupportMessageController::class, 'index']);
-    Route::post('/support-tickets/{ticketId}/messages', [SupportMessageController::class, 'store']);
-    Route::post('/support-tickets/{ticketId}/read', [SupportMessageController::class, 'markAsRead']);
-    Route::get('/support-messages/unread-count', [SupportMessageController::class, 'unreadCount']);
+    // Notifications (Admin)
+    Route::get('/admin/notifications', [NotificationController::class, 'adminIndex']);
+    Route::post('/admin/notifications', [NotificationController::class, 'store']);
+    Route::post('/admin/notifications/{id}/status', [NotificationController::class, 'updateStatus']);
+    Route::delete('/admin/notifications/{id}', [NotificationController::class, 'adminDestroy']);
+    Route::post('/admin/notifications/delete-multiple', [NotificationController::class, 'adminDestroyMultiple']);
 
 });

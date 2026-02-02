@@ -17,20 +17,27 @@ Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
 });
 
-// Channel cho thông báo user (đơn hàng, nạp tiền...)
-Broadcast::channel('user.{id}', function ($user, $id) {
-    return (int) $user->id === (int) $id;
-});
-
-// Channel cho support ticket chat
+// Private channel for support tickets
 Broadcast::channel('support.ticket.{ticketId}', function ($user, $ticketId) {
+    // Check if user owns this ticket or is admin
     $ticket = \App\Models\SupportTicket::find($ticketId);
-    if (!$ticket) return false;
-    return $user->isAdmin() || (int) $user->id === (int) $ticket->user_id;
+    if (!$ticket) {
+        return false;
+    }
+    return $user->id === $ticket->user_id || $user->role === 0;
 });
 
-// Channel cho admin nhận thông báo từ tất cả cuộc hội thoại support
+// Admin channel for all support messages
 Broadcast::channel('support.admin', function ($user) {
-    return $user->isAdmin();
+    return $user->role === 0; // Only admins
 });
 
+// Notifications channel
+Broadcast::channel('notifications.user.{userId}', function ($user, $userId) {
+    return (int) $user->id === (int) $userId;
+});
+
+// Admin notifications channel
+Broadcast::channel('notifications.admin', function ($user) {
+    return $user->role === 0; // Only admins
+});
