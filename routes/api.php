@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\ProviderController;
 use App\Http\Controllers\Api\ProviderServiceController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\StatisticsController;
+use App\Http\Controllers\Api\UploadController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -49,6 +50,9 @@ Route::post('/get-providers', [ProviderController::class, 'getProvider']);
 Route::get('/statistics/summary', [StatisticsController::class, 'summary']);
 Route::get('/statistics/revenue', [StatisticsController::class, 'revenue']);
 Route::get('/statistics/daily-breakdown', [StatisticsController::class, 'dailyBreakdown']);
+
+// Public Notifications API
+Route::get('/notifications', [NotificationController::class, 'index']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -141,16 +145,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/purchased-categories', [DashboardController::class, 'userPurchasedCategories']);
     Route::get('/dashboard/financial-stats', [DashboardController::class, 'financialStats']);
     Route::get('/dashboard/order-stats', [DashboardController::class, 'orderStats']);
-
-    // Notifications (User)
-    Route::get('/notifications', [NotificationController::class, 'index']);
-    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
-
+    
     // Notifications (Admin)
     Route::get('/admin/notifications', [NotificationController::class, 'adminIndex']);
     Route::post('/admin/notifications', [NotificationController::class, 'store']);
+    Route::put('/admin/notifications/{id}', [NotificationController::class, 'update']);
     Route::post('/admin/notifications/{id}/status', [NotificationController::class, 'updateStatus']);
     Route::delete('/admin/notifications/{id}', [NotificationController::class, 'adminDestroy']);
     Route::post('/admin/notifications/delete-multiple', [NotificationController::class, 'adminDestroyMultiple']);
+
+    // Upload
+    Route::post('/upload/image', [UploadController::class, 'uploadImage']);
+    Route::post('/upload/images', [UploadController::class, 'uploadMultipleImages']);
+    Route::delete('/upload/image/{filename}', [UploadController::class, 'deleteImage']);
 
 });

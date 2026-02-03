@@ -16,8 +16,15 @@ class NotificationController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $notifications = Notification::query()
-            ->active()
+        $query = Notification::query()->active();
+
+        // Filter by type if provided
+        if ($request->has('type')) {
+            $query->where('type', $request->type);
+        }
+
+        $notifications = $query
+            ->orderBy('order', 'asc')
             ->orderBy('created_at', 'desc')
             ->paginate($request->input('per_page', 15));
 
@@ -37,6 +44,7 @@ class NotificationController extends Controller
             'title' => 'required|string|max:255',
             'message' => 'required|string',
             'status' => 'nullable|string|in:active,inactive',
+            'order' => 'nullable|integer|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -54,6 +62,37 @@ class NotificationController extends Controller
             'message' => 'Notification created successfully',
             'data' => $notification,
         ], 201);
+    }
+
+    /**
+     * Update notification.
+     */
+    public function update(Request $request, $id): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'type' => 'nullable|string|in:modal,toast,banner,alert',
+            'title' => 'nullable|string|max:255',
+            'message' => 'nullable|string',
+            'status' => 'nullable|string|in:active,inactive',
+            'order' => 'nullable|integer|min:0',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $notification = Notification::findOrFail($id);
+        $notification->update($validator->validated());
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Notification updated successfully',
+            'data' => $notification,
+        ]);
     }
 
     /**
@@ -102,8 +141,7 @@ class NotificationController extends Controller
      */
     public function adminIndex(Request $request): JsonResponse
     {
-        $query = Notification::query()
-            ->orderBy('created_at', 'desc');
+        $query = Notification::query();
 
         // Filter by type
         if ($request->has('type')) {
@@ -115,7 +153,10 @@ class NotificationController extends Controller
             $query->where('status', $request->status);
         }
 
-        $notifications = $query->paginate($request->input('per_page', 20));
+        $notifications = $query
+            ->orderBy('order', 'asc')
+            ->orderBy('created_at', 'desc')
+            ->paginate($request->input('per_page', 20));
 
         return response()->json([
             'success' => true,
