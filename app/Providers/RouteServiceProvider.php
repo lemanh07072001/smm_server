@@ -35,6 +35,9 @@ class RouteServiceProvider extends ServiceProvider
 
             Route::middleware('web')
                 ->group(base_path('routes/web.php'));
+
+            // Register broadcasting authentication routes
+            require base_path('routes/channels.php');
         });
     }
 }
