@@ -108,6 +108,7 @@ class Service extends Model
 
     protected $fillable = [
         'category_group_id',
+        'country_id',
         'group_id',
         'provider_service_id',
         'name',
@@ -124,6 +125,7 @@ class Service extends Model
 
     protected $casts = [
         'category_group_id' => 'integer',
+        'country_id' => 'integer',
         'group_id' => 'string',
         'provider_service_id' => 'integer',
         'sell_rate' => 'decimal:2',
@@ -139,6 +141,11 @@ class Service extends Model
     public function categoryGroup(): BelongsTo
     {
         return $this->belongsTo(CategoryGroup::class);
+    }
+
+    public function country(): BelongsTo
+    {
+        return $this->belongsTo(Country::class);
     }
 
     public function providerService(): BelongsTo

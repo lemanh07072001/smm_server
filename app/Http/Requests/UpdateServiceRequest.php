@@ -32,6 +32,7 @@ class UpdateServiceRequest extends FormRequest
     {
         return [
             'category_group_id' => ['sometimes', 'integer', 'exists:category_groups,id'],
+            'country_id' => ['nullable', 'integer', 'exists:countries,id'],
             'group_id' => ['nullable', 'string'],
             'provider_service_id' => ['sometimes', 'integer', 'exists:provider_services,id'],
             'name' => ['sometimes', 'string', 'max:255'],

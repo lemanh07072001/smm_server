@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\BankAutoController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\CategoryGroupController;
 use App\Http\Controllers\Api\CodeTransactionController;
+use App\Http\Controllers\Api\CountryController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DepositController;
 use App\Http\Controllers\Api\DongtienController;
@@ -45,6 +46,7 @@ Route::get('/category-groups/get-all', [CategoryGroupController::class, 'getAll'
 Route::get('/services/all', [ServiceController::class, 'all']);
 Route::get('/services/form-types', [ServiceController::class, 'formTypes']);
 Route::post('/get-providers', [ProviderController::class, 'getProvider']);
+Route::get('/countries/all', [CountryController::class, 'all']);
 
 // Public Statistics API
 Route::get('/statistics/summary', [StatisticsController::class, 'summary']);
@@ -105,6 +107,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/services/{id}', [ServiceController::class, 'show']);
     Route::post('/services/{id}', [ServiceController::class, 'update']);
     Route::delete('/services/{id}', [ServiceController::class, 'destroy']);
+
+    // Countries
+    Route::get('/countries', [CountryController::class, 'index']);
+    Route::get('/countries/all', [CountryController::class, 'all']);
 
     // Users
     Route::get('/users', [UserController::class, 'index']);
