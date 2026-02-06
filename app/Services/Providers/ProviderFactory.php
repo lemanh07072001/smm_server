@@ -14,6 +14,7 @@ class ProviderFactory
     protected static array $providers = [
         'trao_doi_tuong_tac' => TraoDoiTuongTacProvider::class,
         'smm_panel' => SmmPanelProvider::class,
+        'omo' => OmoProvider::class,
         // Thêm provider mới ở đây:
         // 'another_provider' => AnotherProvider::class,
     ];

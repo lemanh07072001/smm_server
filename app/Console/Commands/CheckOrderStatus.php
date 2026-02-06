@@ -29,13 +29,17 @@ class CheckOrderStatus extends Command
             ->get();
 
         if ($orders->isEmpty()) {
+            $this->info('No orders to check');
             return 0;
         }
+
+        $this->info("Found {$orders->count()} orders to check");
 
         foreach ($orders as $order) {
             $this->processProviderOrders($order);
         }
 
+        $this->info('Done checking orders');
         return 0;
     }
 
@@ -44,37 +48,49 @@ class CheckOrderStatus extends Command
         $provider = $order->service->providerService->provider;
 
         if (!ProviderFactory::isSupported($provider->code)) {
+            $this->warn("Provider {$provider->code} not supported for order #{$order->id}");
             return;
         }
 
         $providerService = ProviderFactory::make($provider);
 
         try {
+            $this->info("Checking order #{$order->id} (Provider: {$provider->code}, Order ID: {$order->provider_order_id})");
+
             $statusResponse = $providerService->getOrderStatus($order->provider_order_id);
 
             if ($statusResponse['success']) {
                 $this->updateOrder($order, $statusResponse, $providerService);
+            } else {
+                $this->error("  Failed to get status: " . ($statusResponse['body'] ?? 'Unknown error'));
             }
         } catch (\Exception $e) {
             Log::error('CheckOrderStatus error', [
                 'provider' => $provider->code,
                 'order_id' => $order->id,
                 'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
+            $this->error("  Error: {$e->getMessage()}");
         }
     }
 
     private function updateOrder(Order $order, $statusResponse, $providerService): void
     {
-        $responseData = $statusResponse['data'] ?? [];
         $providerOrderId = $order->provider_order_id;
 
-        // Parse response - có thể có 2 format:
-        // 1. {"13674357": {"charge": 0, "status": "Canceled", ...}}
-        // 2. {"charge": 0, "status": "Canceled", ...}
-        $statusData = $responseData[$providerOrderId] ?? (isset($responseData['status']) ? $responseData : null);
+        // Sử dụng parseStatusResponse để parse response theo format của từng provider
+        $parsedData = $providerService->parseStatusResponse($statusResponse);
+
+        // Lấy data của order hiện tại
+        $statusData = $parsedData[$providerOrderId] ?? null;
 
         if (!$statusData) {
+            Log::warning('Status data not found for order', [
+                'order_id' => $order->id,
+                'provider_order_id' => $providerOrderId,
+                'parsed_data' => $parsedData,
+            ]);
             return;
         }
 
