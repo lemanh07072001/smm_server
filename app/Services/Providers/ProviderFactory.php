@@ -26,6 +26,8 @@ class ProviderFactory
     {
         $code = $provider->code;
 
+        logger($code);
+
         if (!isset(self::$providers[$code])) {
             throw new InvalidArgumentException("Provider không được hỗ trợ: {$code}");
         }
