@@ -46,6 +46,7 @@ class StoreServiceRequest extends FormRequest
             'allow_multiple_reactions' => ['nullable', 'boolean'],
             'reaction_types' => ['nullable', 'array'],
             'reaction_types.*' => ['string'],
+            'platform' => ['nullable', 'string', 'in:1,2,3,4,5,6'],
         ];
     }
 
@@ -74,6 +75,7 @@ class StoreServiceRequest extends FormRequest
             'max_quantity.min' => 'Số lượng tối đa phải lớn hơn hoặc bằng 1.',
             'max_quantity.gte' => 'Số lượng tối đa phải lớn hơn hoặc bằng số lượng tối thiểu.',
             'is_active.boolean' => 'Trạng thái phải là true hoặc false.',
+            'platform.in' => 'Platform không hợp lệ. Phải là: 1 (Facebook), 2 (Tiktok), 3 (Twitter), 4 (Instagram), 5 (Youtube), 6 (Zalo).',
         ];
     }
 }

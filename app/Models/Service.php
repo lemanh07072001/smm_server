@@ -122,6 +122,7 @@ class Service extends Model
         'is_active',
         'allow_multiple_reactions',
         'reaction_types',
+        'platform',
     ];
 
     protected $casts = [
@@ -137,6 +138,7 @@ class Service extends Model
         'is_active' => 'boolean',
         'allow_multiple_reactions' => 'boolean',
         'reaction_types' => 'array',
+        'platform' => 'string',
     ];
 
     public function categoryGroup(): BelongsTo
