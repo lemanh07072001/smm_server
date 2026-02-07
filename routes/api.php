@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ProviderController;
 use App\Http\Controllers\Api\ProviderServiceController;
 use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\SettingController;
 use App\Http\Controllers\Api\StatisticsController;
 use App\Http\Controllers\Api\UploadController;
 use App\Http\Controllers\Api\UserController;
@@ -48,6 +49,7 @@ Route::get('/services/form-types', [ServiceController::class, 'formTypes']);
 Route::get('/services/platforms', [ServiceController::class, 'platforms']);
 Route::post('/get-providers', [ProviderController::class, 'getProvider']);
 Route::get('/countries/all', [CountryController::class, 'all']);
+Route::get('/settings/all', [SettingController::class, 'all']);
 
 // Public Statistics API
 Route::get('/statistics/summary', [StatisticsController::class, 'summary']);
@@ -159,6 +161,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/notifications/{id}/status', [NotificationController::class, 'updateStatus']);
     Route::delete('/admin/notifications/{id}', [NotificationController::class, 'adminDestroy']);
     Route::post('/admin/notifications/delete-multiple', [NotificationController::class, 'adminDestroyMultiple']);
+
+    // Settings
+    Route::get('/settings', [SettingController::class, 'index']);
+    Route::post('/settings/store', [SettingController::class, 'store']);
+    Route::post('/settings', [SettingController::class, 'update']);
+    Route::get('/settings/{key}', [SettingController::class, 'show']);
+    Route::post('/settings/{key}', [SettingController::class, 'updateSingle']);
+    Route::delete('/settings/{key}', [SettingController::class, 'destroy']);
 
     // Upload
     Route::post('/upload/image', [UploadController::class, 'uploadImage']);
