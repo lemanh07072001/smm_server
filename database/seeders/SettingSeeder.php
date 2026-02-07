@@ -13,19 +13,15 @@ class SettingSeeder extends Seeder
             // General
             ['key' => 'site_name', 'value' => 'SMM Server', 'group' => 'general'],
             ['key' => 'site_description', 'value' => 'Dịch vụ mạng xã hội', 'group' => 'general'],
-            ['key' => 'site_logo', 'value' => null, 'group' => 'general'],
-
-            // Contact
-            ['key' => 'email', 'value' => null, 'group' => 'contact'],
-            ['key' => 'phone', 'value' => null, 'group' => 'contact'],
-            ['key' => 'address', 'value' => null, 'group' => 'contact'],
+            ['key' => 'site_phone', 'value' => null, 'group' => 'general'],
+            ['key' => 'site_email', 'value' => null, 'group' => 'general'],
+            ['key' => 'logo_desktop', 'value' => null, 'group' => 'general'],
+            ['key' => 'logo_mobile', 'value' => null, 'group' => 'general'],
 
             // Social
-            ['key' => 'zalo_link', 'value' => null, 'group' => 'social'],
-            ['key' => 'facebook_link', 'value' => null, 'group' => 'social'],
-            ['key' => 'telegram_link', 'value' => null, 'group' => 'social'],
-            ['key' => 'youtube_link', 'value' => null, 'group' => 'social'],
-            ['key' => 'tiktok_link', 'value' => null, 'group' => 'social'],
+            ['key' => 'social_zalo', 'value' => null, 'group' => 'social'],
+            ['key' => 'social_facebook', 'value' => null, 'group' => 'social'],
+            ['key' => 'social_telegram', 'value' => null, 'group' => 'social'],
         ];
 
         foreach ($settings as $setting) {

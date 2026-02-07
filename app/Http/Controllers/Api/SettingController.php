@@ -25,24 +25,28 @@ class SettingController extends Controller
         ]);
     }
 
-    public function store(Request $request): JsonResponse
+    public function save(Request $request): JsonResponse
     {
         $request->validate([
-            'key' => ['required', 'string', 'max:100', 'unique:settings,key'],
+            'key' => ['required', 'string', 'max:100'],
             'value' => ['nullable', 'string', 'max:2000'],
             'group' => ['required', 'string', 'max:50'],
         ], [
             'key.required' => 'Key là bắt buộc.',
-            'key.unique' => 'Key đã tồn tại.',
             'group.required' => 'Nhóm là bắt buộc.',
         ]);
 
-        $setting = Setting::create($request->only(['key', 'value', 'group']));
+        $setting = Setting::updateOrCreate(
+            ['key' => $request->input('key')],
+            $request->only(['value', 'group'])
+        );
+
+        $isNew = $setting->wasRecentlyCreated;
 
         return response()->json([
-            'message' => 'Tạo cài đặt thành công.',
+            'message' => $isNew ? 'Tạo cài đặt thành công.' : 'Cập nhật cài đặt thành công.',
             'data' => $setting,
-        ], 201);
+        ], $isNew ? 201 : 200);
     }
 
     public function show(string $key): JsonResponse
@@ -65,26 +69,6 @@ class SettingController extends Controller
         return response()->json([
             'message' => 'Cập nhật cài đặt thành công.',
             'data' => Setting::all(),
-        ]);
-    }
-
-    public function updateSingle(Request $request, string $key): JsonResponse
-    {
-        $setting = Setting::where('key', $key)->firstOrFail();
-
-        $request->validate([
-            'key' => ['sometimes', 'string', 'max:100', 'unique:settings,key,' . $setting->id],
-            'value' => ['nullable', 'string', 'max:2000'],
-            'group' => ['sometimes', 'string', 'max:50'],
-        ], [
-            'key.unique' => 'Key đã tồn tại.',
-        ]);
-
-        $setting->update($request->only(['key', 'value', 'group']));
-
-        return response()->json([
-            'message' => 'Cập nhật cài đặt thành công.',
-            'data' => $setting,
         ]);
     }
 

@@ -164,10 +164,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Settings
     Route::get('/settings', [SettingController::class, 'index']);
-    Route::post('/settings/store', [SettingController::class, 'store']);
+    Route::post('/settings/save', [SettingController::class, 'save']);
     Route::post('/settings', [SettingController::class, 'update']);
     Route::get('/settings/{key}', [SettingController::class, 'show']);
-    Route::post('/settings/{key}', [SettingController::class, 'updateSingle']);
     Route::delete('/settings/{key}', [SettingController::class, 'destroy']);
 
     // Upload
