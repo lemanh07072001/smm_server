@@ -31,4 +31,13 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'macrodroid' => [
+        'secret' => env('MACRODROID_SECRET'),
+    ],
+
+    'sepay' => [
+        'api_key'     => env('SEPAY_API_KEY'),
+        'allowed_ips' => array_filter(explode(',', env('SEPAY_ALLOWED_IPS', ''))),
+    ],
+
 ];

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BankAutoController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\SepayController;
 use App\Http\Controllers\Api\CategoryGroupController;
 use App\Http\Controllers\Api\CodeTransactionController;
 use App\Http\Controllers\Api\CountryController;
@@ -35,6 +36,7 @@ use Illuminate\Support\Facades\Route;
 // Webhook routes (public - không cần auth)
 Route::post('/webhook/macrodroid', [BankAutoController::class, 'macrodroidWebhook']);
 Route::post('/webhook/macrodroid/test', [BankAutoController::class, 'testWebhook']);
+Route::post('/webhook/sepay', [SepayController::class, 'webhook'])->middleware('sepay.webhook');
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
