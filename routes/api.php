@@ -34,11 +34,11 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Webhook routes (public - không cần auth, không giới hạn rate limit)
-Route::withoutMiddleware('throttle:api')->group(function () {
-    Route::post('/webhook/macrodroid', [BankAutoController::class, 'macrodroidWebhook']);
-    Route::post('/webhook/macrodroid/test', [BankAutoController::class, 'testWebhook']);
-    Route::post('/webhook/sepay', [SepayController::class, 'webhook'])->middleware('sepay.webhook');
-});
+// Route::withoutMiddleware('throttle:api')->group(function () {
+//     Route::post('/webhook/macrodroid', [BankAutoController::class, 'macrodroidWebhook']);
+//     Route::post('/webhook/macrodroid/test', [BankAutoController::class, 'testWebhook']);
+//     Route::post('/webhook/sepay', [SepayController::class, 'webhook'])->middleware('sepay.webhook');
+// });
 
 // Public routes
 Route::post('/register', [AuthController::class, 'register']);
