@@ -13,6 +13,31 @@ use Illuminate\Support\Facades\Cache;
 
 class ServiceController extends Controller
 {
+    /**
+     * Clear all services cache
+     */
+    private function clearServicesCache(): void
+    {
+        // Clear all cache keys that start with 'services_group_'
+        $cacheKeys = Cache::get('services_cache_keys', []);
+        foreach ($cacheKeys as $key) {
+            Cache::forget($key);
+        }
+        Cache::forget('services_cache_keys');
+    }
+
+    /**
+     * Store cache key for tracking
+     */
+    private function storeCacheKey(string $key): void
+    {
+        $cacheKeys = Cache::get('services_cache_keys', []);
+        if (!in_array($key, $cacheKeys)) {
+            $cacheKeys[] = $key;
+            Cache::put('services_cache_keys', $cacheKeys, 3600);
+        }
+    }
+
     public function index(Request $request): JsonResponse
     {
         $limit = $request->input('limit', 10);
@@ -68,6 +93,9 @@ class ServiceController extends Controller
         $service = Service::create($data);
         $service->load(['categoryGroup', 'providerService']);
 
+        // Clear cache after creating new service
+        $this->clearServicesCache();
+
         return response()->json([
             'message' => 'Tạo dịch vụ thành công.',
             'data' => $service,
@@ -91,6 +119,9 @@ class ServiceController extends Controller
         $service->update($data);
         $service->load(['categoryGroup', 'providerService']);
 
+        // Clear cache after updating service
+        $this->clearServicesCache();
+
         return response()->json([
             'message' => 'Cập nhật dịch vụ thành công.',
             'data' => $service,
@@ -101,6 +132,9 @@ class ServiceController extends Controller
     {
         $service = Service::findOrFail($id);
         $service->delete();
+
+        // Clear cache after deleting service
+        $this->clearServicesCache();
 
         return response()->json([
             'message' => 'Xóa dịch vụ thành công.',
@@ -115,6 +149,9 @@ class ServiceController extends Controller
         ]);
 
         $count = Service::whereIn('id', $request->ids)->delete();
+
+        // Clear cache after deleting multiple services
+        $this->clearServicesCache();
 
         return response()->json([
             'message' => "Đã xóa {$count} dịch vụ thành công.",
@@ -162,35 +199,49 @@ class ServiceController extends Controller
 
     public function getByGroupId(Request $request, ?string $groupId = null): JsonResponse
     {
-        // Filter by is_active if provided
+        // Get filter parameters
         $isActive = $request->input('is_active');
-
-        $query = Service::with(['categoryGroup', 'providerService', 'country'])
-            ->orderBy('sort_order', 'asc')
-            ->orderBy('name', 'asc');
-
-        // Filter by group_id if provided
-        if ($groupId !== null && $groupId !== 'all') {
-            $query->where('group_id', $groupId);
-        }
-
-        // Filter by is_active if provided
-        if ($isActive !== null) {
-            $query->where('is_active', $isActive === '1' || $isActive === 'true' ? 1 : 0);
-        }
-
-        // Filter by category_group_id if provided
         $categoryGroupId = $request->input('category_group_id');
-        if ($categoryGroupId !== null) {
-            $query->where('category_group_id', $categoryGroupId);
-        }
 
-        $services = $query->get();
+        // Create cache key based on parameters
+        $cacheKey = 'services_group_' .
+                    ($groupId ?? 'all') . '_' .
+                    ($isActive ?? 'any') . '_' .
+                    ($categoryGroupId ?? 'any');
 
-        return response()->json([
-            'data' => $services,
-            'total' => $services->count(),
-            'group_id' => $groupId,
-        ]);
+        // Store cache key for tracking
+        $this->storeCacheKey($cacheKey);
+
+        // Cache for 1 hour (3600 seconds)
+        $data = Cache::remember($cacheKey, 3600, function () use ($groupId, $isActive, $categoryGroupId) {
+            $query = Service::with(['categoryGroup', 'providerService', 'country'])
+                ->orderBy('sort_order', 'asc')
+                ->orderBy('name', 'asc');
+
+            // Filter by group_id if provided
+            if ($groupId !== null && $groupId !== 'all') {
+                $query->where('group_id', $groupId);
+            }
+
+            // Filter by is_active if provided
+            if ($isActive !== null) {
+                $query->where('is_active', $isActive === 1 || $isActive === 'true' ? 1 : 0);
+            }
+
+            // Filter by category_group_id if provided
+            if ($categoryGroupId !== null) {
+                $query->where('category_group_id', $categoryGroupId);
+            }
+
+            $services = $query->get();
+
+            return [
+                'data' => $services,
+                'total' => $services->count(),
+                'group_id' => $groupId,
+            ];
+        });
+
+        return response()->json($data);
     }
 }
