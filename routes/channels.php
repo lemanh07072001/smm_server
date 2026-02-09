@@ -17,6 +17,11 @@ Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return (int) $user->id === (int) $id;
 });
 
+// Channel for user-specific events (deposits, orders)
+Broadcast::channel('user.{userId}', function ($user, $userId) {
+    return (int) $user->id === (int) $userId;
+});
+
 // Private channel for support tickets
 Broadcast::channel('support.ticket.{ticketId}', function ($user, $ticketId) {
     // Check if user owns this ticket or is admin
