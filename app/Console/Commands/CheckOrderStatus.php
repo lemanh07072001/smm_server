@@ -3,8 +3,10 @@
 namespace App\Console\Commands;
 
 use App\Events\OrderStatusUpdated;
+use App\Models\AffiliateCommission;
 use App\Models\Order;
 use App\Models\Dongtien;
+use App\Models\User;
 use App\Services\Providers\ProviderFactory;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -120,6 +122,11 @@ class CheckOrderStatus extends Command
             $oldStatus = $order->status;
             $order->update($updateData);
 
+            // Tính hoa hồng affiliate khi order completed
+            if (isset($updateData['status']) && $updateData['status'] === Order::STATUS_COMPLETED && $oldStatus !== Order::STATUS_COMPLETED) {
+                $this->processAffiliateCommission($order);
+            }
+
             // Chỉ broadcast event khi status thay đổi
             if (isset($updateData['status']) && $oldStatus !== $updateData['status']) {
                 Log::info('Broadcasting OrderStatusUpdated', [
@@ -132,6 +139,60 @@ class CheckOrderStatus extends Command
                 // Broadcast 1 event duy nhất, kèm refund nếu có
                 event(new OrderStatusUpdated($order, $refundTransaction));
             }
+        }
+    }
+
+    /**
+     * Tính hoa hồng affiliate khi order hoàn thành
+     */
+    private function processAffiliateCommission(Order $order): void
+    {
+        try {
+            $user = $order->user;
+            if (!$user || !$user->referred_by) {
+                return;
+            }
+
+            // Kiểm tra đã tính commission cho order này chưa
+            if (AffiliateCommission::where('order_id', $order->id)->exists()) {
+                return;
+            }
+
+            $referrer = User::find($user->referred_by);
+            if (!$referrer) {
+                return;
+            }
+
+            $commissionRate = 10.00; // 10%
+            $orderAmount = (float) $order->charge_amount;
+            $commissionAmount = round($orderAmount * $commissionRate / 100, 2);
+
+            if ($commissionAmount <= 0) {
+                return;
+            }
+
+            DB::beginTransaction();
+
+            AffiliateCommission::create([
+                'user_id' => $referrer->id,
+                'order_id' => $order->id,
+                'referred_user_id' => $user->id,
+                'order_amount' => $orderAmount,
+                'commission_rate' => $commissionRate,
+                'commission_amount' => $commissionAmount,
+            ]);
+
+            $referrer->increment('affiliate_balance', $commissionAmount);
+
+            DB::commit();
+
+            $this->info("    Affiliate: +{$commissionAmount} cho user #{$referrer->id} từ order #{$order->id}");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Affiliate commission error', [
+                'order_id' => $order->id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 

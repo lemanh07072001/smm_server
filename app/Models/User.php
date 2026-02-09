@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -33,6 +34,8 @@ class User extends Authenticatable
         'discount',
         'api_key',
         'is_active',
+        'referred_by',
+        'affiliate_balance',
     ];
 
     /**
@@ -57,6 +60,8 @@ class User extends Authenticatable
         'balance' => 'decimal:6',
         'discount' => 'decimal:2',
         'is_active' => 'boolean',
+        'referred_by' => 'integer',
+        'affiliate_balance' => 'decimal:6',
     ];
 
     /**
@@ -89,5 +94,37 @@ class User extends Authenticatable
     public function loginHistories(): HasMany
     {
         return $this->hasMany(LoginHistory::class);
+    }
+
+    /**
+     * Get the user who referred this user.
+     */
+    public function referrer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'referred_by');
+    }
+
+    /**
+     * Get users referred by this user.
+     */
+    public function referrals(): HasMany
+    {
+        return $this->hasMany(User::class, 'referred_by');
+    }
+
+    /**
+     * Get affiliate commissions earned by this user.
+     */
+    public function affiliateCommissions(): HasMany
+    {
+        return $this->hasMany(AffiliateCommission::class);
+    }
+
+    /**
+     * Get affiliate withdrawal requests.
+     */
+    public function affiliateWithdrawals(): HasMany
+    {
+        return $this->hasMany(AffiliateWithdrawal::class);
     }
 }
