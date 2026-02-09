@@ -31,7 +31,7 @@ class Service extends Model
             'CODE'  => '1',
             'TEXT'  => 'Facebook',
             'group' => [
-                'fb_feel'               => 'Cảm xúc Facebook',
+                'fb_reaction'               => 'Cảm xúc Facebook',
                 'fb_follow'             => 'Follow Facebook',
                 'fb_like_page'          => 'Like page Facebook',
                 'fb_join_group'         => 'Join group Facebook',
