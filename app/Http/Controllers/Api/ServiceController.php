@@ -159,4 +159,38 @@ class ServiceController extends Controller
             'data' => $data,
         ]);
     }
+
+    public function getByGroupId(Request $request, ?string $groupId = null): JsonResponse
+    {
+        // Filter by is_active if provided
+        $isActive = $request->input('is_active');
+
+        $query = Service::with(['categoryGroup', 'providerService', 'country'])
+            ->orderBy('sort_order', 'asc')
+            ->orderBy('name', 'asc');
+
+        // Filter by group_id if provided
+        if ($groupId !== null && $groupId !== 'all') {
+            $query->where('group_id', $groupId);
+        }
+
+        // Filter by is_active if provided
+        if ($isActive !== null) {
+            $query->where('is_active', $isActive === '1' || $isActive === 'true' ? 1 : 0);
+        }
+
+        // Filter by category_group_id if provided
+        $categoryGroupId = $request->input('category_group_id');
+        if ($categoryGroupId !== null) {
+            $query->where('category_group_id', $categoryGroupId);
+        }
+
+        $services = $query->get();
+
+        return response()->json([
+            'data' => $services,
+            'total' => $services->count(),
+            'group_id' => $groupId,
+        ]);
+    }
 }

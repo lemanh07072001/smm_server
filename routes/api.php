@@ -51,6 +51,7 @@ Route::get('/category-groups/get-all', [CategoryGroupController::class, 'getAll'
 Route::get('/services/all', [ServiceController::class, 'all']);
 Route::get('/services/form-types', [ServiceController::class, 'formTypes']);
 Route::get('/services/platforms', [ServiceController::class, 'platforms']);
+Route::get('/services/group/{groupId?}', [ServiceController::class, 'getByGroupId']);
 Route::post('/get-providers', [ProviderController::class, 'getProvider']);
 Route::get('/countries/all', [CountryController::class, 'all']);
 Route::get('/settings/all', [SettingController::class, 'all']);
