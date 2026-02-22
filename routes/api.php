@@ -56,6 +56,7 @@ Route::get('/services/platforms', [ServiceController::class, 'platforms']);
 Route::post('/get-providers', [ProviderController::class, 'getProvider']);
 Route::get('/countries/all', [CountryController::class, 'all']);
 Route::get('/settings/all', [SettingController::class, 'all']);
+Route::get('/settings/public', [SettingController::class, 'publicIndex']);
 
 // Public Statistics API
 Route::get('/statistics/summary', [StatisticsController::class, 'summary']);

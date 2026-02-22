@@ -7,9 +7,41 @@ use App\Http\Requests\UpdateSettingRequest;
 use App\Models\Setting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class SettingController extends Controller
 {
+    private const CACHE_KEY = 'settings_public';
+
+    public function publicIndex(Request $request): JsonResponse
+    {
+        $group = $request->input('group');
+        $cacheKey = $group ? self::CACHE_KEY . '_' . $group : self::CACHE_KEY;
+
+        $data = Cache::rememberForever($cacheKey, function () use ($group) {
+            $query = Setting::orderBy('group')->orderBy('key');
+            if ($group) {
+                $query->where('group', $group);
+            }
+            return $query->get();
+        });
+
+        return response()->json([
+            'data' => $data,
+        ]);
+    }
+
+    private function clearCache(): void
+    {
+        // Xoá cache chính và tất cả cache theo group
+        $keys = Cache::get('settings_cache_keys', []);
+        foreach ($keys as $key) {
+            Cache::forget($key);
+        }
+        Cache::forget(self::CACHE_KEY);
+        Cache::forget('settings_cache_keys');
+    }
+
     public function index(Request $request): JsonResponse
     {
         $group = $request->input('group');
@@ -42,6 +74,7 @@ class SettingController extends Controller
         );
 
         $isNew = $setting->wasRecentlyCreated;
+        $this->clearCache();
 
         return response()->json([
             'message' => $isNew ? 'Tạo cài đặt thành công.' : 'Cập nhật cài đặt thành công.',
@@ -66,6 +99,8 @@ class SettingController extends Controller
             Setting::where('key', $item['key'])->update(['value' => $item['value']]);
         }
 
+        $this->clearCache();
+
         return response()->json([
             'message' => 'Cập nhật cài đặt thành công.',
             'data' => Setting::all(),
@@ -76,6 +111,7 @@ class SettingController extends Controller
     {
         $setting = Setting::where('key', $key)->firstOrFail();
         $setting->delete();
+        $this->clearCache();
 
         return response()->json([
             'message' => 'Xóa cài đặt thành công.',
