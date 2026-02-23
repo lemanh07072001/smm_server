@@ -357,47 +357,45 @@ class OmoProvider extends BaseProvider
 
     /**
      * Build cancel URL
+     * OMO dùng endpoint: /api/update_order
      */
     protected function buildCancelUrl(): string
     {
         $baseUrl = rtrim($this->provider->api_url, '/');
-        return $baseUrl . '/api/cancel';
+        return $baseUrl . '/api/update_order';
     }
 
     /**
      * Build cancel body
      * OMO yêu cầu:
      * {
-     *   "KeyApi": "...",
-     *   "IdOrder": "live_fb_xxx" hoặc ["live_fb_xxx", "live_fb_yyy"]
+     *   "IdOrder": "live_fb_xxx",
+     *   "Status": "STOP"
      * }
      */
     protected function buildCancelBody(string|array $orderIds): array
     {
         return [
-            'KeyApi' => $this->provider->api_key,
-            'IdOrder' => $orderIds, // Có thể là string hoặc array
+            'IdOrder' => is_array($orderIds) ? $orderIds[0] : $orderIds,
+            'Status' => 'STOP',
         ];
     }
 
     /**
      * Parse cancel response
-     * Response format (giả định):
+     * Response format:
      * {
-     *   "Success": true,
-     *   "Message": "Order cancelled successfully"
+     *   "Message": "Huỷ đơn hàng thành công"
      * }
-     *
-     * Lưu ý: Cần cập nhật lại khi biết chính xác response format của OMO
      */
     protected function parseCancelResponse(array $response): array
     {
         $data = $response['data'] ?? [];
+        $message = $data['Message'] ?? $data['message'] ?? '';
 
-        // Kiểm tra success theo các field có thể có
-        $isSuccess = $data['Success'] ?? $data['success'] ?? false;
+        $isSuccess = $response['success'] && str_contains(strtolower($message), 'thành công');
 
-        $response['success'] = $response['success'] && $isSuccess;
+        $response['success'] = $isSuccess;
 
         return $response;
     }
