@@ -47,7 +47,7 @@ class ServiceController extends Controller
         $categoryGroupId = $request->input('category_group_id');
         $providerServiceId = $request->input('provider_service_id');
 
-        $query = Service::with(['providerService','provider'])
+        $query = Service::with(['providerService.provider'])
             ->orderBy('sort_order', 'asc')
             ->orderBy('created_at', 'desc');
 
