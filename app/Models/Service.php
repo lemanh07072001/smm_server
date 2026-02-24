@@ -88,6 +88,7 @@ class Service extends Model
                 'youtube_comment_all'   => 'Comment Youtube',
                 'youtube_follow'        => 'Follow Youtube',
                 'youtube_follow_all'    => 'Follow Youtube',
+                'youtube_view'          => 'View Youtube',
             ]
         ],
         '6' => [
