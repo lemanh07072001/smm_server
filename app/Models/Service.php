@@ -85,9 +85,9 @@ class Service extends Model
                 'youtube_dislike'       => 'Dislike Youtube',
                 'youtube_dislike_all'   => 'Dislike All Name Youtube',
                 'youtube_comment'       => 'Comment Youtube',
-                'youtube_comment_all'   => 'Comment Youtube',
+                'youtube_comment_all'   => 'Comment All Youtube',
                 'youtube_follow'        => 'Follow Youtube',
-                'youtube_follow_all'    => 'Follow Youtube',
+                'youtube_follow_all'    => 'Follow All Youtube',
                 'youtube_view'          => 'View Youtube',
             ]
         ],
