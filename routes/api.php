@@ -116,7 +116,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/services/{id}', [ServiceController::class, 'show']);
     Route::post('/services/{id}', [ServiceController::class, 'update']);
     Route::delete('/services/{id}', [ServiceController::class, 'destroy']);
-Route::get('/services/group/{groupId?}', [ServiceController::class, 'getByGroupId']);
+    Route::get('/services/group/{groupId?}', [ServiceController::class, 'getByGroupId']);
 
     // Countries
     Route::get('/countries', [CountryController::class, 'index']);

@@ -157,6 +157,11 @@ class Service extends Model
         return $this->belongsTo(ProviderService::class);
     }
 
+    public function provider(): BelongsTo
+    {
+        return $this->belongsTo(Provider::class);
+    }
+
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
