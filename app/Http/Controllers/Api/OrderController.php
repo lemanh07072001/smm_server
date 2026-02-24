@@ -171,6 +171,7 @@ class OrderController extends Controller
             'quantity' => ['required', 'integer', 'min:1'],
             'reactions' => ['nullable', 'array'],
             'comments' => ['nullable', 'string'],
+            'livestream_duration' => ['nullable', 'integer', 'min:1'],
         ]);
 
         // Convert newline thực thành literal \n để lưu DB
@@ -212,9 +213,22 @@ class OrderController extends Controller
         $costRate = $service->providerService->cost_rate;
         $sellRate = $service->sell_rate;
         $quantity = $validated['quantity'];
+        $livestreamDuration = $validated['livestream_duration'] ?? 0;
 
-        $costAmount = $costRate * $quantity;
-        $chargeAmount = $sellRate * $quantity;
+        // Platform fb_view_livestream: tính theo công thức giá × thời gian × số mắt
+        if ($service->platform === 'fb_view_livestream') {
+            if (empty($livestreamDuration)) {
+                return response()->json([
+                    'message' => 'Vui lòng nhập thời gian livestream.',
+                ], 422);
+            }
+            $costAmount = $costRate * $livestreamDuration * $quantity;
+            $chargeAmount = $sellRate * $livestreamDuration * $quantity;
+        } else {
+            $costAmount = $costRate * $quantity;
+            $chargeAmount = $sellRate * $quantity;
+        }
+
         $profitAmount = $chargeAmount - $costAmount;
 
         // Kiểm tra số dư của user
@@ -237,6 +251,7 @@ class OrderController extends Controller
                 'provider_service_id' => $validated['provider_service_id'],
                 'link' => $validated['link'],
                 'quantity' => $quantity,
+                'livestream_duration' => $livestreamDuration ?: null,
                 'comments' => $validated['comments'] ?? null,
                 'status' => Order::STATUS_PENDING,
                 'cost_rate' => $costRate,

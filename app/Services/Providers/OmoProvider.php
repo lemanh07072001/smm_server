@@ -53,8 +53,8 @@ class OmoProvider extends BaseProvider
             'Type' => $service->providerService->provider_service_code,
         ];
 
-        // Thêm Time nếu có trong validated data (mặc định 30)
-        $body['Time'] = $validated['time'] ?? 30;
+        // Thêm Time từ livestream_duration (mặc định 30)
+        $body['Time'] = $validated['livestream_duration'] ?? 30;
 
         return $body;
     }

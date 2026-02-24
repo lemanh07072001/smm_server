@@ -66,6 +66,8 @@ class Order extends Model
         'is_finalized',
         'error_message',
         'scan',
+        'lost_count',
+        'livestream_duration',
     ];
 
     /**
@@ -91,6 +93,8 @@ class Order extends Model
         'final_profit' => 'decimal:2',
         'is_finalized' => 'boolean',
         'completed_at' => 'datetime',
+        'lost_count' => 'integer',
+        'livestream_duration' => 'integer',
     ];
 
     /**
