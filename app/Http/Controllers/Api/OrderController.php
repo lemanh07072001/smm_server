@@ -72,7 +72,7 @@ class OrderController extends Controller
             ->toArray();
 
         $statusCounts = [
-            'all' => array_sum($statusCountsRaw),
+            'all' => Order::count(),
             'pending' => $statusCountsRaw['pending'] ?? 0,
             'processing' => $statusCountsRaw['processing'] ?? 0,
             'in_progress' => $statusCountsRaw['in_progress'] ?? 0,
