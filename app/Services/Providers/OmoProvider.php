@@ -105,12 +105,14 @@ class OmoProvider extends BaseProvider
                            $responseData['error'] ??
                            $responseData['Message'] ??
                            $responseData['message'] ??
-                           'IdOrder is empty';
+                           $responseData['status'] ??
+                           ('IdOrder is empty | raw: ' . $response->body());
 
                 Log::error('OMO Provider API Failed', [
                     'provider' => $this->provider->code,
                     'status_code' => $result['status_code'],
                     'error' => $errorMsg,
+                    'raw_body' => $response->body(),
                     'data' => $result['data'],
                     'request_body' => $body,
                 ]);
