@@ -31,7 +31,6 @@ class StoreServiceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'category_group_id' => ['required', 'integer', 'exists:category_groups,id'],
             'country_id' => ['nullable', 'integer', 'exists:countries,id'],
             'group_id' => ['nullable', 'string'],
             'provider_service_id' => ['required', 'integer', 'exists:provider_services,id'],
@@ -58,8 +57,6 @@ class StoreServiceRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'category_group_id.required' => 'Nhóm danh mục là bắt buộc.',
-            'category_group_id.exists' => 'Nhóm danh mục không tồn tại.',
             'provider_service_id.required' => 'Provider service là bắt buộc.',
             'provider_service_id.exists' => 'Provider service không tồn tại.',
             'name.required' => 'Tên là bắt buộc.',
