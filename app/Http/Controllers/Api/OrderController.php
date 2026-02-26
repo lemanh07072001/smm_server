@@ -251,7 +251,7 @@ class OrderController extends Controller
                 'provider_service_id' => $validated['provider_service_id'],
                 'link' => $validated['link'],
                 'quantity' => $quantity,
-                'livestream_duration' => $livestreamDuration ?: null,
+                'livestream_duration' => $livestreamDuration ?: 0,
                 'comments' => $validated['comments'] ?? null,
                 'status' => Order::STATUS_PENDING,
                 'cost_rate' => $costRate,
