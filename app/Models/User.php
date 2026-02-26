@@ -17,8 +17,9 @@ class User extends Authenticatable
     /**
      * Role constants
      */
-    public const ROLE_ADMIN = 0;
-    public const ROLE_USER = 1;
+    public const ROLE_ADMIN    = 0;
+    public const ROLE_USER     = 1;
+    public const ROLE_RESELLER = 3;
 
     /**
      * The attributes that are mass assignable.
@@ -81,6 +82,25 @@ class User extends Authenticatable
     }
 
     /**
+     * Check if user is reseller (role 3).
+     */
+    public function isReseller(): bool
+    {
+        return $this->role === self::ROLE_RESELLER;
+    }
+
+    /**
+     * Lấy giá bán riêng của user này cho một service.
+     * Trả về null nếu không có giá riêng.
+     */
+    public function getPriceForService(int $serviceId): ?string
+    {
+        return $this->servicePrices()
+            ->where('service_id', $serviceId)
+            ->value('sell_rate');
+    }
+
+    /**
      * Get the orders for the user.
      */
     public function orders(): HasMany
@@ -126,5 +146,13 @@ class User extends Authenticatable
     public function affiliateWithdrawals(): HasMany
     {
         return $this->hasMany(AffiliateWithdrawal::class);
+    }
+
+    /**
+     * Giá bán riêng theo từng service (dành cho role reseller).
+     */
+    public function servicePrices(): HasMany
+    {
+        return $this->hasMany(UserServicePrice::class);
     }
 }

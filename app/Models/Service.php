@@ -50,11 +50,12 @@ class Service extends Model
             'TEXT'  => 'Tiktok',
             'group' => [
                 'tiktok_like'                               => 'Like Tiktok',
-                'tiktok_like_livestream_multiple_in_post'   => 'Like Tiktok',
+                'tiktok_like_livestream'   => 'Thả Tim Live Tiktok',
                 'tiktok_follow'                             => 'Follow Tiktok',
                 'tiktok_comment'                            => 'Comment Tiktok',
                 'tiktok_comment_livestream'                 => 'Comment Tiktok Livestream',
                 'tiktok_share'                              => 'Share Tiktok',
+                'tiktok_buff_like'                          => 'Buff Live',
             ]
         ],
         '3' => [
@@ -162,6 +163,28 @@ class Service extends Model
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    public function userPrices(): HasMany
+    {
+        return $this->hasMany(UserServicePrice::class);
+    }
+
+    /**
+     * Lấy giá bán cho một user cụ thể.
+     * Nếu user là reseller và có giá riêng → dùng giá riêng.
+     * Nếu không → trả về sell_rate mặc định.
+     */
+    public function getPriceForUser(User $user): string
+    {
+        if ($user->isReseller()) {
+            $customPrice = $user->getPriceForService($this->id);
+            if ($customPrice !== null) {
+                return $customPrice;
+            }
+        }
+
+        return $this->sell_rate;
     }
 
     /**

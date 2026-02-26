@@ -56,6 +56,8 @@ class OmoProvider extends BaseProvider
         // Thêm Time từ livestream_duration (mặc định 30)
         $body['Time'] = $validated['livestream_duration'] ?? 30;
 
+        Log::info('OMO buildAddOrderBody', ['body' => $body]);
+
         return $body;
     }
 

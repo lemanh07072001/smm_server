@@ -10,8 +10,7 @@ class TraoDoiTuongTacProvider extends BaseProvider
 {
     public function buildApiUrl(): string
     {
-        $baseUrl = rtrim($this->provider->api_url, '/');
-        return $baseUrl . '/api/v3';
+        return $$this->provider->api_url;
     }
 
     public function buildAddOrderBody(Service $service, array $validated): array
