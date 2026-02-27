@@ -55,7 +55,7 @@ class Service extends Model
                 'tiktok_comment'                            => 'Comment Tiktok',
                 'tiktok_comment_livestream'                 => 'Comment Tiktok Livestream',
                 'tiktok_share'                              => 'Share Tiktok',
-                'tiktok_buff_view_live'                     => 'Buff View Live',
+                'tiktok_buff_view_live'                     => 'Buff Mắt Xem Live',
                 'tiktok_buff_view_video'                    => 'Buff Mắt Xem Video',
             ]
         ],
