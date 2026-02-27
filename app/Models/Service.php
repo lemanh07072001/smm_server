@@ -50,11 +50,12 @@ class Service extends Model
             'TEXT'  => 'Tiktok',
             'group' => [
                 'tiktok_like'                               => 'Like Tiktok',
-                'tiktok_like_livestream_multiple_in_post'   => 'Like Tiktok',
+                'tiktok_like_livestream'                    => 'Thả Tim Live Tiktok',
                 'tiktok_follow'                             => 'Follow Tiktok',
                 'tiktok_comment'                            => 'Comment Tiktok',
                 'tiktok_comment_livestream'                 => 'Comment Tiktok Livestream',
                 'tiktok_share'                              => 'Share Tiktok',
+                'tiktok_buff_view_live'                     => 'Buff View Live',
             ]
         ],
         '3' => [
@@ -85,9 +86,10 @@ class Service extends Model
                 'youtube_dislike'       => 'Dislike Youtube',
                 'youtube_dislike_all'   => 'Dislike All Name Youtube',
                 'youtube_comment'       => 'Comment Youtube',
-                'youtube_comment_all'   => 'Comment Youtube',
+                'youtube_comment_all'   => 'Comment All Youtube',
                 'youtube_follow'        => 'Follow Youtube',
-                'youtube_follow_all'    => 'Follow Youtube',
+                'youtube_follow_all'    => 'Follow All Youtube',
+                'youtube_view'          => 'View Youtube',
             ]
         ],
         '6' => [
@@ -156,6 +158,7 @@ class Service extends Model
     {
         return $this->belongsTo(ProviderService::class);
     }
+
 
     public function orders(): HasMany
     {

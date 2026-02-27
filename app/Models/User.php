@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -39,6 +40,8 @@ class User extends Authenticatable
         'api_key',
         'is_active',
         'agent_level',
+        'referred_by',
+        'affiliate_balance',
     ];
 
     /**
@@ -64,6 +67,8 @@ class User extends Authenticatable
         'discount' => 'decimal:2',
         'is_active' => 'boolean',
         'agent_level' => 'integer',
+        'referred_by' => 'integer',
+        'affiliate_balance' => 'decimal:6',
     ];
 
     /**
@@ -83,6 +88,25 @@ class User extends Authenticatable
     }
 
     /**
+     * Check if user is reseller (role 3).
+     */
+    public function isReseller(): bool
+    {
+        return $this->role === self::ROLE_RESELLER;
+    }
+
+    /**
+     * Lấy giá bán riêng của user này cho một service.
+     * Trả về null nếu không có giá riêng.
+     */
+    public function getPriceForService(int $serviceId): ?string
+    {
+        return $this->servicePrices()
+            ->where('service_id', $serviceId)
+            ->value('sell_rate');
+    }
+
+    /**
      * Get the orders for the user.
      */
     public function orders(): HasMany
@@ -96,5 +120,45 @@ class User extends Authenticatable
     public function loginHistories(): HasMany
     {
         return $this->hasMany(LoginHistory::class);
+    }
+
+    /**
+     * Get the user who referred this user.
+     */
+    public function referrer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'referred_by');
+    }
+
+    /**
+     * Get users referred by this user.
+     */
+    public function referrals(): HasMany
+    {
+        return $this->hasMany(User::class, 'referred_by');
+    }
+
+    /**
+     * Get affiliate commissions earned by this user.
+     */
+    public function affiliateCommissions(): HasMany
+    {
+        return $this->hasMany(AffiliateCommission::class);
+    }
+
+    /**
+     * Get affiliate withdrawal requests.
+     */
+    public function affiliateWithdrawals(): HasMany
+    {
+        return $this->hasMany(AffiliateWithdrawal::class);
+    }
+
+    /**
+     * Giá bán riêng theo từng service (dành cho role reseller).
+     */
+    public function servicePrices(): HasMany
+    {
+        return $this->hasMany(UserServicePrice::class);
     }
 }

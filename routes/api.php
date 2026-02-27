@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AffiliateController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BankAutoController;
 use App\Http\Controllers\Api\CategoryController;
@@ -55,6 +56,7 @@ Route::get('/services/platforms', [ServiceController::class, 'platforms']);
 Route::post('/get-providers', [ProviderController::class, 'getProvider']);
 Route::get('/countries/all', [CountryController::class, 'all']);
 Route::get('/settings/all', [SettingController::class, 'all']);
+Route::get('/settings/public', [SettingController::class, 'publicIndex']);
 
 // Public Statistics API
 Route::get('/statistics/summary', [StatisticsController::class, 'summary']);
@@ -183,5 +185,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/upload/image', [UploadController::class, 'uploadImage']);
     Route::post('/upload/images', [UploadController::class, 'uploadMultipleImages']);
     Route::delete('/upload/image/{filename}', [UploadController::class, 'deleteImage']);
+
+    // Affiliate
+    Route::get('/affiliate/dashboard', [AffiliateController::class, 'dashboard']);
+    Route::get('/affiliate/commissions', [AffiliateController::class, 'commissions']);
+    Route::get('/affiliate/referrals', [AffiliateController::class, 'referrals']);
+    Route::get('/affiliate/link', [AffiliateController::class, 'getLink']);
+    Route::post('/affiliate/withdraw', [AffiliateController::class, 'withdraw']);
+    Route::get('/affiliate/withdrawals', [AffiliateController::class, 'withdrawals']);
+
+    // Admin Affiliate
+    Route::get('/admin/affiliate/withdrawals', [AffiliateController::class, 'adminWithdrawals']);
+    Route::post('/admin/affiliate/withdrawals/{id}/approve', [AffiliateController::class, 'approve']);
+    Route::post('/admin/affiliate/withdrawals/{id}/reject', [AffiliateController::class, 'reject']);
 
 });

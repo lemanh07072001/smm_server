@@ -3,61 +3,53 @@
 namespace App\Services\Providers;
 
 use App\Models\Provider;
-use InvalidArgumentException;
 
 class ProviderFactory
 {
     /**
-     * Map provider code to provider class
-     * Khi thêm provider mới, chỉ cần thêm vào đây
+     * Chỉ khai báo các provider có API format KHÁC với TraoDoiTuongTacProvider.
+     * Mọi provider không có trong danh sách này sẽ dùng TraoDoiTuongTacProvider làm mặc định.
      */
-    protected static array $providers = [
-        'trao_doi_tuong_tac' => TraoDoiTuongTacProvider::class,
+    protected static array $customProviders = [
         'smm_panel' => SmmPanelProvider::class,
-        'omo' => OmoProvider::class,
-        // Thêm provider mới ở đây:
+        'omo'       => OmoProvider::class,
+        // Thêm provider mới ở đây chỉ khi format API thực sự khác:
         // 'another_provider' => AnotherProvider::class,
     ];
 
     /**
-     * Create provider instance by code
+     * Create provider instance by code.
+     * Mặc định dùng TraoDoiTuongTacProvider nếu không có entry riêng.
      */
     public static function make(Provider $provider): ProviderInterface
     {
         $code = $provider->code;
-
-        logger($code);
-
-        if (!isset(self::$providers[$code])) {
-            throw new InvalidArgumentException("Provider không được hỗ trợ: {$code}");
-        }
-
-        $providerClass = self::$providers[$code];
+        $providerClass = self::$customProviders[$code] ?? TraoDoiTuongTacProvider::class;
 
         return (new $providerClass())->setProvider($provider);
     }
 
     /**
-     * Check if provider is supported
+     * Mọi provider đều được hỗ trợ — không có entry riêng thì dùng mặc định.
      */
     public static function isSupported(string $code): bool
     {
-        return isset(self::$providers[$code]);
+        return true;
     }
 
     /**
-     * Get all supported provider codes
+     * Get all custom provider codes (không tính mặc định).
      */
     public static function getSupportedProviders(): array
     {
-        return array_keys(self::$providers);
+        return array_keys(self::$customProviders);
     }
 
     /**
-     * Register a new provider dynamically
+     * Register a custom provider dynamically.
      */
     public static function register(string $code, string $class): void
     {
-        self::$providers[$code] = $class;
+        self::$customProviders[$code] = $class;
     }
 }

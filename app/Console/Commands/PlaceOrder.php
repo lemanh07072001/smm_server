@@ -128,6 +128,11 @@ class PlaceOrder extends Command
                 'quantity' => $order->quantity,
             ];
 
+            // Thêm livestream_duration nếu có
+            if (!empty($order->livestream_duration)) {
+                $validated['livestream_duration'] = $order->livestream_duration;
+            }
+
             // Thêm comments nếu có
             if (!empty($order->comments)) {
                 $validated['comments'] = $order->comments;
