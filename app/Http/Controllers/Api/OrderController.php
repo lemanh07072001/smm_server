@@ -210,7 +210,7 @@ class OrderController extends Controller
 
         // Tính toán số tiền
         $costRate = $service->providerService->cost_rate;
-        $sellRate = $service->sell_rate;
+        $sellRate = $service->getPriceForUser($user);
         $quantity = $validated['quantity'];
 
         $costAmount = $costRate * $quantity;

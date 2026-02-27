@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -43,7 +44,8 @@ class UpdateUserRequest extends FormRequest
             'name' => ['sometimes', 'string', 'max:50'],
             'email' => ['sometimes', 'string', 'email', 'max:100', Rule::unique('users', 'email')->ignore($userId)],
             'password' => ['nullable', 'string', 'min:6'],
-            'role' => ['nullable', 'integer', 'in:0,1'],
+            'role' => ['nullable', 'integer', Rule::in(User::ROLES)],
+            'agent_level' => ['nullable', 'integer', Rule::in(User::AGENT_LEVELS)],
             'balance' => ['nullable', 'numeric', 'min:0'],
             'discount' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'is_active' => ['nullable', 'boolean'],
@@ -62,7 +64,8 @@ class UpdateUserRequest extends FormRequest
             'email.email' => 'Email không hợp lệ.',
             'email.unique' => 'Email đã tồn tại.',
             'password.min' => 'Mật khẩu phải có ít nhất 6 ký tự.',
-            'role.in' => 'Role phải là 0 (admin) hoặc 1 (user).',
+            'role.in' => 'Role phải là 0 (admin), 1 (user) hoặc 2 (reseller).',
+            'agent_level.in' => 'Cấp đại lý phải là 1, 2, 3 hoặc 4.',
             'balance.numeric' => 'Số dư phải là số.',
             'balance.min' => 'Số dư phải lớn hơn hoặc bằng 0.',
             'discount.numeric' => 'Giảm giá phải là số.',
