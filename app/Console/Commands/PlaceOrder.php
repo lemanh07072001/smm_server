@@ -22,14 +22,14 @@ class PlaceOrder extends Command
      * @var string
      */
     protected $signature = 'order_place
-                            {action=add : Action to perform (add-priority|add|scan)}';
+                            {action=add : Action to perform (add-priority|add|scan|status)}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Xử lý đẩy đơn hàng lên provider (add-priority: priority=0 chạy liên tục, add: xử lý queue bình thường, scan: quét orders STATUS_PENDING retry<5 đẩy vào queue)';
+    protected $description = 'Xử lý đẩy đơn hàng lên provider (add-priority: priority=0 chạy liên tục, add: xử lý queue bình thường, scan: quét orders STATUS_PENDING retry<5 đẩy vào queue, status: kiểm tra trạng thái orders từ provider)';
 
     /**
      * Execute the console command.
@@ -42,7 +42,8 @@ class PlaceOrder extends Command
             'add-priority' => $this->handleAddPriority(),
             'add'          => $this->handleAdd(),
             'scan'         => $this->handleScan(),
-            default        => $this->error("Action không hợp lệ. Chỉ hỗ trợ: add-priority, add, scan"),
+            'status'       => $this->handleStatus(),
+            default        => $this->error("Action không hợp lệ. Chỉ hỗ trợ: add-priority, add, scan, status"),
         };
     }
 
@@ -232,6 +233,104 @@ class PlaceOrder extends Command
     }
 
     /**
+     * Kiểm tra trạng thái orders từ provider
+     * Chạy bằng: php artisan order_place status
+     */
+    protected function handleStatus()
+    {
+        $orders = Order::with(['service.providerService.provider'])
+            ->whereNotIn('status', [
+                Order::STATUS_COMPLETED,
+                Order::STATUS_FAILED,
+                Order::STATUS_CANCELED,
+                Order::STATUS_PARTIAL,
+            ])
+            ->whereNotNull('provider_order_id')
+            ->orderBy('id')
+            ->get();
+
+        if ($orders->isEmpty()) {
+            $this->info('Không có order nào cần kiểm tra trạng thái.');
+            return 0;
+        }
+
+        $this->info("Tìm thấy {$orders->count()} orders cần kiểm tra.");
+
+        // Group theo provider để gọi batch
+        $groupedOrders = $orders->groupBy(fn($o) => $o->service->providerService->provider->id ?? null);
+        $groupedOrders->forget(null);
+
+        foreach ($groupedOrders as $providerOrders) {
+            $this->processStatusBatch($providerOrders);
+        }
+
+        $this->info('Hoàn thành!');
+        return 0;
+    }
+
+    /**
+     * Kiểm tra trạng thái batch orders từ cùng 1 provider
+     */
+    protected function processStatusBatch($orders): void
+    {
+        try {
+            $firstOrder = $orders->first();
+            $provider = $firstOrder->service->providerService->provider ?? null;
+
+            if (!$provider || !ProviderFactory::isSupported($provider->code)) {
+                $this->warn("Provider không hợp lệ hoặc không được hỗ trợ, bỏ qua {$orders->count()} orders.");
+                return;
+            }
+
+            $providerService = ProviderFactory::make($provider);
+            $this->info("Provider {$provider->code}: Kiểm tra {$orders->count()} orders...");
+
+            foreach ($orders as $order) {
+                try {
+                    $statusResponse = $providerService->getOrderStatus($order->provider_order_id);
+
+                    if (!isset($statusResponse['success']) || !$statusResponse['success']) {
+                        $this->warn("Order #{$order->id}: Lỗi lấy status - " . ($statusResponse['body'] ?? 'Unknown'));
+                        continue;
+                    }
+
+                    $parsedData = $providerService->parseStatusResponse($statusResponse);
+                    $statusData = $parsedData[$order->provider_order_id] ?? null;
+
+                    if (!$statusData) {
+                        $this->warn("Order #{$order->id}: Không tìm thấy status trong response.");
+                        continue;
+                    }
+
+                    $updateData = [];
+
+                    if (isset($statusData['start_count'])) {
+                        $updateData['start_count'] = $statusData['start_count'];
+                    }
+                    if (isset($statusData['remains'])) {
+                        $updateData['remains'] = $statusData['remains'];
+                    }
+                    if (!empty($statusData['status'])) {
+                        $updateData['status'] = Order::mapProviderStatus($statusData['status']);
+                    }
+
+                    if (!empty($updateData)) {
+                        $order->update($updateData);
+                        $this->info("Order #{$order->id}: {$statusData['status']} -> {$updateData['status']}");
+                        Log::info("PlaceOrder STATUS: #{$order->id} -> {$updateData['status']}");
+                    }
+                } catch (\Exception $e) {
+                    $this->error("Order #{$order->id}: {$e->getMessage()}");
+                    Log::error("PlaceOrder STATUS: #{$order->id} -> {$e->getMessage()}");
+                }
+            }
+        } catch (\Exception $e) {
+            $this->error("processStatusBatch: {$e->getMessage()}");
+            Log::error("PlaceOrder STATUS batch: {$e->getMessage()}");
+        }
+    }
+
+    /**
      * Gọi Provider API và trả về kết quả
      */
     protected function callProviderApi(Order $order): array
@@ -292,6 +391,10 @@ class PlaceOrder extends Command
     protected function fetchProviderStatus($providerService, $providerOrderId): ?array
     {
         try {
+            if ($providerOrderId === null) {
+                return null;
+            }
+
             $statusResponse = $providerService->getOrderStatus($providerOrderId);
             $responseData = $statusResponse['data'] ?? [];
             return $responseData[$providerOrderId] ?? (isset($responseData['status']) ? $responseData : null);
@@ -428,6 +531,13 @@ class PlaceOrder extends Command
             }
 
             $providerOrderId = $providerService->getOrderIdFromResponse($response);
+
+            if ($providerOrderId === null) {
+                $logger->orderFailed('Provider không trả về order ID');
+                $this->updateOrderFailed($order, 'Provider không trả về order ID');
+                return;
+            }
+
             $logger->provider($provider->code, $providerOrderId);
 
             $logger->statusCheck();

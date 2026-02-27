@@ -19,12 +19,6 @@ class User extends Authenticatable
     public const ROLE_RESELLER = 2;
     public const ROLES = [self::ROLE_ADMIN, self::ROLE_USER, self::ROLE_RESELLER];
 
-    public const AGENT_LEVEL_1 = 1;
-    public const AGENT_LEVEL_2 = 2;
-    public const AGENT_LEVEL_3 = 3;
-    public const AGENT_LEVEL_4 = 4;
-    public const AGENT_LEVELS = [self::AGENT_LEVEL_1, self::AGENT_LEVEL_2, self::AGENT_LEVEL_3, self::AGENT_LEVEL_4];
-
     /**
      * The attributes that are mass assignable.
      *
@@ -39,7 +33,6 @@ class User extends Authenticatable
         'discount',
         'api_key',
         'is_active',
-        'agent_level',
         'referred_by',
         'affiliate_balance',
     ];
@@ -66,7 +59,6 @@ class User extends Authenticatable
         'balance' => 'decimal:6',
         'discount' => 'decimal:2',
         'is_active' => 'boolean',
-        'agent_level' => 'integer',
         'referred_by' => 'integer',
         'affiliate_balance' => 'decimal:6',
     ];

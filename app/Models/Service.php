@@ -166,30 +166,8 @@ class Service extends Model
         return $this->hasMany(Order::class);
     }
 
-    public function agentPrices(): HasMany
-    {
-        return $this->hasMany(ServiceAgentPrice::class);
-    }
-
-    public function priceHistories(): HasMany
-    {
-        return $this->hasMany(ServicePriceHistory::class);
-    }
-
-    /**
-     * Lấy giá bán theo cấp đại lý của user.
-     * Nếu user không có agent_level hoặc không có giá riêng cho cấp đó, fallback về sell_rate mặc định.
-     */
     public function getPriceForUser(User $user): float
     {
-        if ($user->agent_level !== null) {
-            $agentPrice = $this->agentPrices()
-                ->where('agent_level', $user->agent_level)
-                ->first();
-            if ($agentPrice) {
-                return (float) $agentPrice->sell_rate;
-            }
-        }
         return (float) $this->sell_rate;
     }
 

@@ -117,10 +117,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/services/{id}', [ServiceController::class, 'show']);
     Route::post('/services/{id}', [ServiceController::class, 'update']);
     Route::delete('/services/{id}', [ServiceController::class, 'destroy']);
-    // Service Agent Prices
-    Route::get('/services/{id}/agent-prices', [ServiceController::class, 'getAgentPrices']);
-    Route::put('/services/{id}/agent-prices', [ServiceController::class, 'updateAgentPrices']);
-    Route::get('/services/{id}/price-history', [ServiceController::class, 'getPriceHistory']);
 
     // Countries
     Route::get('/countries', [CountryController::class, 'index']);
