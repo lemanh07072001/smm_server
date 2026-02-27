@@ -11,6 +11,10 @@ class Order extends Model
     use HasFactory;
 
     const KEY_ID_REDIS_ORDER = 'key_id_redis_order';
+    const KEY_ID_REDIS_ORDER_PRIORITY_0 = 'key_id_redis_order_priority_0';
+
+    const RETRY_COUNT = 5;
+    const PRIORITY = [0, 1];
 
     public const STATUS_PENDING = 'pending';  // Khởi tạo
     public const STATUS_IN_PROGRESS = 'in_progress'; // Đang chạy
@@ -68,6 +72,8 @@ class Order extends Model
         'scan',
         'lost_count',
         'livestream_duration',
+        'retry_count',
+        'is_priority',
     ];
 
     /**
@@ -95,6 +101,8 @@ class Order extends Model
         'completed_at' => 'datetime',
         'lost_count' => 'integer',
         'livestream_duration' => 'integer',
+        'retry_count' => 'integer',
+        'is_priority' => 'integer',
     ];
 
     /**

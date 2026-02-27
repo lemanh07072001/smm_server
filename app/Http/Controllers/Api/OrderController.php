@@ -254,6 +254,7 @@ class OrderController extends Controller
                 'livestream_duration' => $livestreamDuration ?: 0,
                 'comments' => $validated['comments'] ?? null,
                 'status' => Order::STATUS_PENDING,
+                'is_priority' => $service->priority ?? Order::PRIORITY[1],
                 'cost_rate' => $costRate,
                 'sell_rate' => $sellRate,
                 'charge_amount' => $chargeAmount,

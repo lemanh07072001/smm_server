@@ -97,9 +97,23 @@ class RedisHelper
   {
     return Redis::lrange($key, $start, $stop);
   }
+  public static function rpush($key, $value)
+  {
+    return Redis::rpush($key, $value);
+  }
+
   public static function llen($key)
   {
     return Redis::llen($key);
+  }
+
+  /**
+   * Acquire a distributed lock using Redis SET NX EX
+   */
+  public static function acquireLock($key, $value, $ttlSeconds = 300)
+  {
+    $result = Redis::set($key, $value, 'EX', $ttlSeconds, 'NX');
+    return $result !== null && $result !== false;
   }
 
   /**
