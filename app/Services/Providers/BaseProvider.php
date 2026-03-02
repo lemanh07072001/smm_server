@@ -123,12 +123,6 @@ abstract class BaseProvider implements ProviderInterface
                 'request_order_ids'  => is_array($orderIds) ? array_values($orderIds) : [$orderIds],
             ];
 
-            // Log::info('Get Order Status Response 1', [
-            //     'provider'    => $this->provider->code,
-            //     'order_ids'   => $orderIds,
-            //     'status_code' => $result['status_code'],
-            //     'data'        => $result['data'],
-            // ]);
 
             return $result;
         } catch (\Exception $e) {

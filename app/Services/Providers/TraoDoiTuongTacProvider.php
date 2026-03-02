@@ -35,9 +35,7 @@ class TraoDoiTuongTacProvider extends BaseProvider
     public function getOrderIdFromResponse(array $response): ?string
     {
         $data = $response['data'] ?? [];
-        $orderId = $data['order'] ?? $data['id'] ?? null;
-        Log::info('getOrderIdFromResponse', ['data' => $data, 'order_id' => $orderId]);
-        return $orderId;
+        return $data['order'] ?? $data['id'] ?? null;
     }
 
     public function isSuccessResponse(array $response): bool
@@ -50,7 +48,7 @@ class TraoDoiTuongTacProvider extends BaseProvider
         return [
             'key'    => $this->provider->api_key,
             'action' => 'status',
-            'order'  => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
+            'orders' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
         ];
     }
 

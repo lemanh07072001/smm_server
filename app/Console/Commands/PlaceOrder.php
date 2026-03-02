@@ -297,6 +297,14 @@ class PlaceOrder extends Command
                         context: "Provider {$provider->code} batch status"
                     );
 
+                    Log::info('STATUS response', [
+                        'provider' => $provider->code,
+                        'sent_ids' => $providerOrderIds,
+                        'success'  => $statusResponse['success'] ?? null,
+                        'body'     => $statusResponse['body'] ?? null,
+                        'data'     => $statusResponse['data'] ?? null,
+                    ]);
+
                     if ($statusResponse === null || !($statusResponse['success'] ?? false)) {
                         $body = $statusResponse['body'] ?? 'Unknown';
                         $this->warn("Provider {$provider->code}: Lỗi sau retry - {$body}. Bỏ qua " . count($providerOrderIds) . " orders.");
@@ -307,22 +315,7 @@ class PlaceOrder extends Command
 
                     $consecutiveFails = 0; // reset khi thành công
 
-                    // In raw response ra console
-                    $rawData = $statusResponse['data'] ?? [];
-                    Log::info('STATUS raw response', [
-                        'provider'          => $provider->code,
-                        'sent_ids'          => $providerOrderIds,
-                        'raw_body'          => $statusResponse['body'] ?? null,
-                        'raw_data'          => $rawData,
-                        'request_order_id'  => $statusResponse['request_order_id'] ?? null,
-                        'request_order_ids' => $statusResponse['request_order_ids'] ?? null,
-                    ]);
-
                     $parsedData = $providerService->parseStatusResponse($statusResponse);
-
-                    $this->line("SENT IDs: " . implode(', ', $providerOrderIds));
-                    $this->line("RAW BODY: " . ($statusResponse['body'] ?? 'null'));
-                    $this->line("PARSED keys: " . (empty($parsedData) ? '(empty)' : implode(', ', array_keys($parsedData))));
 
                     // Dùng bulk update thay vì update từng row
                     $bulkUpdates = [];
