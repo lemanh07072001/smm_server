@@ -195,8 +195,7 @@ class PlaceOrder extends Command
 
         $statusFilter = [
             Order::STATUS_PENDING,
-            Order::STATUS_COMPLETED,
-  
+
         ];
 
         $totalCount = Order::whereNotIn('status', $statusFilter)
