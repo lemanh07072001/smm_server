@@ -269,24 +269,6 @@ class PlaceOrder extends Command
                     continue;
                 }
 
-                // Log + lọc bỏ các provider_order_id không hợp lệ (không phải số nguyên)
-                $invalidIds = array_filter($providerOrderIds, fn($id) => !ctype_digit((string) $id));
-                if (!empty($invalidIds)) {
-                    foreach ($invalidIds as $badId) {
-                        $badOrder = $orderMap->get($badId);
-                        $this->warn("Order #{$badOrder?->id} có provider_order_id không hợp lệ: '{$badId}' → bỏ qua");
-                        Log::warning("PlaceOrder STATUS: invalid provider_order_id", [
-                            'order_id'          => $badOrder?->id,
-                            'provider_order_id' => $badId,
-                        ]);
-                    }
-                    $providerOrderIds = array_values(array_filter($providerOrderIds, fn($id) => ctype_digit((string) $id)));
-                }
-
-                if (empty($providerOrderIds)) {
-                    continue;
-                }
-
                 // Circuit breaker: provider đang down → bỏ qua phần còn lại
                 if ($consecutiveFails >= $circuitBreakerLimit) {
                     $remaining = $orders->count() - ($chunks->search($chunk) * $apiBatchSize);
