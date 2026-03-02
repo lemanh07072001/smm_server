@@ -115,10 +115,11 @@ abstract class BaseProvider implements ProviderInterface
             $response = Http::timeout(10)->asForm()->post($url, $body);
 
             $result = [
-                'success'       => $response->successful(),
-                'status_code'   => $response->status(),
-                'body'          => $response->body(),
-                'data'          => $response->json() ?? [],
+                'success'           => $response->successful(),
+                'status_code'       => $response->status(),
+                'body'              => $response->body(),
+                'data'              => $response->json() ?? [],
+                'request_order_id'  => is_array($orderIds) ? null : (string) $orderIds,
             ];
 
             // Log::info('Get Order Status Response 1', [

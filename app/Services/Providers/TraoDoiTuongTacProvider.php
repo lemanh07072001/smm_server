@@ -147,18 +147,37 @@ class TraoDoiTuongTacProvider extends BaseProvider
     public function parseStatusResponse(array $response): array
     {
         $data = $response['data'] ?? [];
-
-        Log::info('TraoDoiTuongTac parseStatusResponse', [
-            'raw_data'   => $data,
-            'data_keys'  => array_keys((array) $data),
-            'data_count' => count((array) $data),
-        ]);
-
         $result = [];
 
-        foreach ($data as $orderId => $orderData) {
+        // Trường hợp lỗi: {"success": false, "error": "..."}
+        if (isset($data['error']) || (isset($data['success']) && $data['success'] === false)) {
+            return $result;
+        }
+
+        // Trường hợp single order (flat): {"charge": "...", "status": "In progress", ...}
+        // Nhận biết: có key "status" trực tiếp, không phải nested object
+        if (isset($data['status']) && !is_array($data['status'])) {
+            // Lấy order ID từ request body — truyền qua $response['request_order_id'] nếu có
+            // Hoặc dùng key đặc biệt '_single' để caller tự map
+            $orderId = $response['request_order_id'] ?? '_single';
             $result[$orderId] = [
                 'provider_order_id' => $orderId,
+                'status'      => $data['status'],
+                'start_count' => $data['start_count'] ?? 0,
+                'remains'     => $data['remains'] ?? 0,
+                'charge'      => $data['charge'] ?? 0,
+                'currency'    => $data['currency'] ?? 'VND',
+            ];
+            return $result;
+        }
+
+        // Trường hợp batch (nested): {"14204384": {"status": "...", ...}, "14204385": {...}}
+        foreach ($data as $orderId => $orderData) {
+            if (!is_array($orderData)) {
+                continue;
+            }
+            $result[(string) $orderId] = [
+                'provider_order_id' => (string) $orderId,
                 'status'      => $orderData['status'] ?? null,
                 'start_count' => $orderData['start_count'] ?? 0,
                 'remains'     => $orderData['remains'] ?? 0,
@@ -166,10 +185,6 @@ class TraoDoiTuongTacProvider extends BaseProvider
                 'currency'    => $orderData['currency'] ?? 'VND',
             ];
         }
-
-        Log::info('TraoDoiTuongTac parseStatusResponse result', [
-            'result_keys' => array_keys($result),
-        ]);
 
         return $result;
     }
