@@ -173,7 +173,7 @@ class Order extends Model
         return match (strtolower($providerStatus)) {
             'pending'                               => self::STATUS_PENDING,
             'processing'                            => self::STATUS_PROCESSING,
-            'in_progress'                           => self::STATUS_IN_PROGRESS,
+            'in_progress', 'in progress'            => self::STATUS_IN_PROGRESS,
             'completed'                             => self::STATUS_COMPLETED,
             'partial'                               => self::STATUS_PARTIAL,
             'canceled'                              => self::STATUS_CANCELED,

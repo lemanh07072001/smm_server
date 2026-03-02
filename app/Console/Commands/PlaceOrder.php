@@ -193,7 +193,10 @@ class PlaceOrder extends Command
         $chunkSize = 500;
         $processed = 0;
 
-        $statusFilter = [Order::STATUS_PENDING];
+        $statusFilter = [
+            Order::STATUS_PENDING,
+
+        ];
 
         $totalCount = Order::whereNotIn('status', $statusFilter)
             ->whereNotNull('provider_order_id')
@@ -329,7 +332,8 @@ class PlaceOrder extends Command
                             $updateData['remains'] = $statusData['remains'];
                         }
                         if (!empty($statusData['status'])) {
-                            $updateData['status'] = Order::mapProviderStatus($statusData['status']);
+                            // Dùng provider's mapProviderStatus để convert raw status (vd: "In progress" -> "in_progress")
+                            $updateData['status'] = $providerService->mapProviderStatus($statusData['status']);
                         }
 
                         if (!empty($updateData)) {
