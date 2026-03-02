@@ -119,7 +119,8 @@ abstract class BaseProvider implements ProviderInterface
                 'status_code'       => $response->status(),
                 'body'              => $response->body(),
                 'data'              => $response->json() ?? [],
-                'request_order_id'  => is_array($orderIds) ? null : (string) $orderIds,
+                'request_order_id'   => is_array($orderIds) ? null : (string) $orderIds,
+                'request_order_ids'  => is_array($orderIds) ? array_values($orderIds) : [$orderIds],
             ];
 
             // Log::info('Get Order Status Response 1', [

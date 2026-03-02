@@ -156,10 +156,19 @@ class TraoDoiTuongTacProvider extends BaseProvider
 
         // Trường hợp single order (flat): {"charge": "...", "status": "In progress", ...}
         // Nhận biết: có key "status" trực tiếp, không phải nested object
+        // Xảy ra khi gửi 1 order ID duy nhất (string hoặc array 1 phần tử)
         if (isset($data['status']) && !is_array($data['status'])) {
-            // Lấy order ID từ request body — truyền qua $response['request_order_id'] nếu có
-            // Hoặc dùng key đặc biệt '_single' để caller tự map
-            $orderId = $response['request_order_id'] ?? '_single';
+            $orderId = $response['request_order_id'] ?? null;
+
+            // Nếu không có request_order_id (batch 1 phần tử), lấy từ request_order_ids
+            if ($orderId === null && isset($response['request_order_ids']) && count($response['request_order_ids']) === 1) {
+                $orderId = (string) $response['request_order_ids'][0];
+            }
+
+            if ($orderId === null) {
+                return $result;
+            }
+
             $result[$orderId] = [
                 'provider_order_id' => $orderId,
                 'status'      => $data['status'],
