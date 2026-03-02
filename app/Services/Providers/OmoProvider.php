@@ -195,7 +195,7 @@ class OmoProvider extends BaseProvider
             ]);
 
             // OMO dùng KeyApi trong body, không dùng Bearer token
-            $response = Http::timeout(30)
+            $response = Http::timeout(10)
                 ->withHeaders([
                     'Content-Type' => 'application/json',
                 ])

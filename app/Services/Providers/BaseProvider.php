@@ -112,7 +112,7 @@ abstract class BaseProvider implements ProviderInterface
         $body = $this->buildStatusBody($orderIds);
 
         try {
-            $response = Http::timeout(30)->post($url, $body);
+            $response = Http::timeout(10)->post($url, $body);
 
             $result = [
                 'success'       => $response->successful(),

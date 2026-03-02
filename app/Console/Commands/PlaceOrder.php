@@ -5,9 +5,7 @@ namespace App\Console\Commands;
 use App\Helpers\OrderActivityLogger;
 use App\Helpers\RedisHelper;
 use App\Helpers\TelegramHelper;
-use App\Models\Dongtien;
 use App\Models\Order;
-use App\Models\Service;
 use App\Services\Providers\ProviderFactory;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -40,7 +38,6 @@ class PlaceOrder extends Command
 
         return match ($action) {
             'add-priority' => $this->handleAddPriority(),
-            'add'          => $this->handleAdd(),
             'scan'         => $this->handleScan(),
             'status'       => $this->handleStatus(),
             default        => $this->error("Action không hợp lệ. Chỉ hỗ trợ: add-priority, add, scan, status"),
@@ -136,49 +133,7 @@ class PlaceOrder extends Command
         }
     }
 
-    /**
-     * Xử lý queue thông thường (KEY_ID_REDIS_ORDER) - chạy liên tục
-     * Chạy bằng: php artisan order_place add
-     */
-    protected function handleAdd()
-    {
-        $this->info('Bắt đầu xử lý đơn hàng: ' . date('Y-m-d H:i:s'));
-        $maxRamMb = 1024;
-
-        while (true) {
-            $currentRamMb = memory_get_usage(true) / 1024 / 1024;
-            if ($currentRamMb > $maxRamMb) {
-                $this->warn("RAM vượt quá {$maxRamMb}MB, dừng xử lý.");
-                break;
-            }
-
-            try {
-                $orderJson = Redis::connection(RedisHelper::REDIS_ORDER_WEB)->rpop(Order::KEY_ID_REDIS_ORDER);
-
-                if (!$orderJson) {
-                    echo '.';
-                    sleep(1);
-                    continue;
-                }
-
-                $orderData = json_decode($orderJson, true);
-
-                if (!$orderData || !isset($orderData['id'])) {
-                    $this->warn("Dữ liệu order không hợp lệ");
-                    continue;
-                }
-
-                $this->processOrder($orderData);
-            } catch (\Exception $e) {
-                $this->error("Lỗi: " . $e->getMessage());
-                Log::error('PlaceOrder error', ['error' => $e->getMessage()]);
-                sleep(1);
-            }
-        }
-
-        return 0;
-    }
-
+   
     /**
      * Quét orders STATUS_PENDING, retry_count < RETRY_COUNT và đẩy vào queue
      * Chạy bằng: php artisan order_place scan
@@ -204,7 +159,6 @@ class PlaceOrder extends Command
 
             if (!$lockAcquired) {
                 $skippedCount++;
-                $this->warn("Order #{$order->id}: Đang được xử lý bởi worker khác, bỏ qua.");
                 continue;
             }
 
@@ -213,10 +167,8 @@ class PlaceOrder extends Command
 
                 if (isset($order->is_priority) && $order->is_priority == Order::PRIORITY[0]) {
                     RedisHelper::lpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, $orderData);
-                    $this->info("Order #{$order->id}: Đã lock và push vào queue priority");
                 } else {
                     RedisHelper::rpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, $orderData);
-                    $this->info("Order #{$order->id}: Đã lock và push vào queue normal");
                 }
 
                 $successCount++;
@@ -224,11 +176,9 @@ class PlaceOrder extends Command
                 $this->error("Order #{$order->id}: Exception - {$e->getMessage()}");
                 RedisHelper::del($lockKey);
             }
-
-            usleep(50000); // 50ms
         }
 
-        $this->info("Hoàn thành! Đã lock và push {$successCount} orders vào queue, bỏ qua: {$skippedCount}");
+        $this->info("Hoàn thành! Push {$successCount} orders vào queue, bỏ qua: {$skippedCount}");
         return 0;
     }
 
@@ -238,31 +188,40 @@ class PlaceOrder extends Command
      */
     protected function handleStatus()
     {
-        $orders = Order::with(['service.providerService.provider'])
-            ->whereNotIn('status', [
-                Order::STATUS_COMPLETED,
-                Order::STATUS_FAILED,
-                Order::STATUS_CANCELED,
-                Order::STATUS_PARTIAL,
-            ])
-            ->whereNotNull('provider_order_id')
-            ->orderBy('id')
-            ->get();
+        $this->info('Bắt đầu kiểm tra trạng thái orders...');
 
-        if ($orders->isEmpty()) {
+        $chunkSize = 500;
+        $processed = 0;
+
+        $statusFilter = [Order::STATUS_IN_PROGRESS];
+
+        $totalCount = Order::whereNotIn('status', $statusFilter)
+            ->whereNotNull('provider_order_id')
+            ->count();
+
+        if ($totalCount === 0) {
             $this->info('Không có order nào cần kiểm tra trạng thái.');
             return 0;
         }
 
-        $this->info("Tìm thấy {$orders->count()} orders cần kiểm tra.");
+        $this->info("Tìm thấy {$totalCount} orders cần kiểm tra.");
 
-        // Group theo provider để gọi batch
-        $groupedOrders = $orders->groupBy(fn($o) => $o->service->providerService->provider->id ?? null);
-        $groupedOrders->forget(null);
+        Order::with(['service.providerService.provider'])
+            ->whereNotIn('status', $statusFilter)
+            ->whereNotNull('provider_order_id')
+            ->orderBy('id')
+            ->chunk($chunkSize, function ($orders) use (&$processed, $totalCount) {
+                // Group theo provider để gọi batch API
+                $groupedOrders = $orders->groupBy(fn($o) => $o->service->providerService->provider->id ?? null);
+                $groupedOrders->forget(null);
 
-        foreach ($groupedOrders as $providerOrders) {
-            $this->processStatusBatch($providerOrders);
-        }
+                foreach ($groupedOrders as $providerOrders) {
+                    $this->processStatusBatch($providerOrders);
+                }
+
+                $processed += $orders->count();
+                $this->info("Tiến độ: {$processed}/{$totalCount}");
+            });
 
         $this->info('Hoàn thành!');
         return 0;
@@ -270,9 +229,15 @@ class PlaceOrder extends Command
 
     /**
      * Kiểm tra trạng thái batch orders từ cùng 1 provider
+     * Gọi API 1 lần cho nhiều orders thay vì từng order
      */
     protected function processStatusBatch($orders): void
     {
+        // Batch size tối đa mỗi lần gọi API (tránh request quá lớn)
+        $apiBatchSize = 100;
+        $sleepBetweenBatchMs = 500; // 500ms giữa các lần gọi API
+        $circuitBreakerLimit = 10;  // Số batch thất bại liên tiếp → ngắt provider
+
         try {
             $firstOrder = $orders->first();
             $provider = $firstOrder->service->providerService->provider ?? null;
@@ -285,48 +250,183 @@ class PlaceOrder extends Command
             $providerService = ProviderFactory::make($provider);
             $this->info("Provider {$provider->code}: Kiểm tra {$orders->count()} orders...");
 
-            foreach ($orders as $order) {
-                try {
-                    $statusResponse = $providerService->getOrderStatus($order->provider_order_id);
+            // Index orders theo provider_order_id để tra cứu nhanh
+            $orderMap = $orders->keyBy('provider_order_id');
 
-                    if (!isset($statusResponse['success']) || !$statusResponse['success']) {
-                        $this->warn("Order #{$order->id}: Lỗi lấy status - " . ($statusResponse['body'] ?? 'Unknown'));
-                        continue;
-                    }
+            // Chia thành các mini-batch để gọi API
+            $chunks = $orders->chunk($apiBatchSize);
 
-                    $parsedData = $providerService->parseStatusResponse($statusResponse);
-                    $statusData = $parsedData[$order->provider_order_id] ?? null;
+            $consecutiveFails = 0; // đếm số batch thất bại liên tiếp
 
-                    if (!$statusData) {
-                        $this->warn("Order #{$order->id}: Không tìm thấy status trong response.");
-                        continue;
-                    }
+            foreach ($chunks as $chunk) {
+                $providerOrderIds = $chunk->pluck('provider_order_id')->filter()->values()->all();
 
-                    $updateData = [];
-
-                    if (isset($statusData['start_count'])) {
-                        $updateData['start_count'] = $statusData['start_count'];
-                    }
-                    if (isset($statusData['remains'])) {
-                        $updateData['remains'] = $statusData['remains'];
-                    }
-                    if (!empty($statusData['status'])) {
-                        $updateData['status'] = Order::mapProviderStatus($statusData['status']);
-                    }
-
-                    if (!empty($updateData)) {
-                        $order->update($updateData);
-                        $this->info("Order #{$order->id}: {$statusData['status']} -> {$updateData['status']}");
-                        Log::info("PlaceOrder STATUS: #{$order->id} -> {$updateData['status']}");
-                    }
-                } catch (\Exception $e) {
-                    $this->error("Order #{$order->id}: {$e->getMessage()}");
-                    Log::error("PlaceOrder STATUS: #{$order->id} -> {$e->getMessage()}");
+                if (empty($providerOrderIds)) {
+                    continue;
                 }
+
+                // Circuit breaker: provider đang down → bỏ qua phần còn lại
+                if ($consecutiveFails >= $circuitBreakerLimit) {
+                    $remaining = $orders->count() - ($chunks->search($chunk) * $apiBatchSize);
+                    $this->error("Provider {$provider->code}: {$consecutiveFails} batch thất bại liên tiếp → ngắt circuit breaker, bỏ qua ~{$remaining} orders còn lại.");
+                    Log::error("PlaceOrder STATUS: circuit breaker triggered", ['provider' => $provider->code, 'consecutive_fails' => $consecutiveFails]);
+
+                    $failedOrders = $consecutiveFails * $apiBatchSize;
+                    TelegramHelper::sendNotifyErrorSystem(
+                        "Circuit Breaker kich hoat!\n"
+                        . "Provider: {$provider->code}\n"
+                        . "Loi lien tiep: {$consecutiveFails} batch ({$failedOrders} orders)\n"
+                        . "Bo qua: ~{$remaining} orders con lai\n"
+                        . "Thoi gian: " . now()->format('Y-m-d H:i:s'),
+                        'Provider Down'
+                    );
+
+                    break;
+                }
+
+                try {
+                    // 1 lần gọi API cho toàn bộ batch, retry tối đa 2 lần nếu timeout/lỗi
+                    $statusResponse = $this->callWithRetry(
+                        fn() => $providerService->getOrderStatus($providerOrderIds),
+                        maxRetries: 2,
+                        backoffMs: 1000,
+                        context: "Provider {$provider->code} batch status"
+                    );
+
+                    if ($statusResponse === null || !($statusResponse['success'] ?? false)) {
+                        $body = $statusResponse['body'] ?? 'Unknown';
+                        $this->warn("Provider {$provider->code}: Lỗi sau retry - {$body}. Bỏ qua " . count($providerOrderIds) . " orders.");
+                        $consecutiveFails++;
+                        usleep($sleepBetweenBatchMs * 1000);
+                        continue;
+                    }
+
+                    $consecutiveFails = 0; // reset khi thành công
+                    $parsedData = $providerService->parseStatusResponse($statusResponse);
+
+                    // Dùng bulk update thay vì update từng row
+                    $bulkUpdates = [];
+
+                    foreach ($providerOrderIds as $providerOrderId) {
+                        $statusData = $parsedData[$providerOrderId] ?? null;
+                        $order = $orderMap->get($providerOrderId);
+
+                        if (!$order) {
+                            continue;
+                        }
+
+                        if (!$statusData) {
+                            $this->warn("Order #{$order->id} (provider: {$providerOrderId}): Không có status trong response.");
+                            continue;
+                        }
+
+                        $updateData = [];
+
+                        if (isset($statusData['start_count'])) {
+                            $updateData['start_count'] = $statusData['start_count'];
+                        }
+                        if (isset($statusData['remains'])) {
+                            $updateData['remains'] = $statusData['remains'];
+                        }
+                        if (!empty($statusData['status'])) {
+                            $updateData['status'] = Order::mapProviderStatus($statusData['status']);
+                        }
+
+                        if (!empty($updateData)) {
+                            $bulkUpdates[] = ['id' => $order->id, 'data' => $updateData, 'provider_status' => $statusData['status'] ?? '?'];
+                        }
+                    }
+
+                    // Thực hiện bulk update theo từng nhóm status giống nhau
+                    $this->applyBulkStatusUpdates($bulkUpdates);
+                } catch (\Exception $e) {
+                    $this->error("Provider {$provider->code} batch error: {$e->getMessage()}");
+                    Log::error("PlaceOrder STATUS batch: provider={$provider->code} -> {$e->getMessage()}");
+                }
+
+                // Throttle giữa các lần gọi API để tránh rate limit
+                usleep($sleepBetweenBatchMs * 1000);
             }
         } catch (\Exception $e) {
             $this->error("processStatusBatch: {$e->getMessage()}");
             Log::error("PlaceOrder STATUS batch: {$e->getMessage()}");
+        }
+    }
+
+    /**
+     * Gọi một callable với retry + exponential backoff
+     * Trả về kết quả nếu thành công, null nếu hết retry
+     */
+    protected function callWithRetry(callable $fn, int $maxRetries, int $backoffMs, string $context = ''): ?array
+    {
+        $attempt = 0;
+
+        while ($attempt <= $maxRetries) {
+            try {
+                $result = $fn();
+
+                // Thành công
+                if ($result['success'] ?? false) {
+                    return $result;
+                }
+
+                // API trả về lỗi (không phải timeout) → không retry
+                $this->warn("{$context}: API lỗi - " . ($result['body'] ?? 'Unknown'));
+                return $result;
+
+            } catch (\Exception $e) {
+                $attempt++;
+                $isTimeout = str_contains($e->getMessage(), 'timed out')
+                    || str_contains($e->getMessage(), 'cURL error 28')
+                    || $e instanceof \Illuminate\Http\Client\ConnectionException;
+
+                if ($attempt > $maxRetries) {
+                    $this->error("{$context}: Timeout/lỗi sau {$maxRetries} lần retry - {$e->getMessage()}");
+                    Log::error("{$context} timeout sau retry", ['error' => $e->getMessage()]);
+                    return null;
+                }
+
+                $waitMs = $backoffMs * $attempt; // 2s, 4s, 6s
+                $type = $isTimeout ? 'Timeout' : 'Exception';
+                $this->warn("{$context}: {$type} lần {$attempt}/{$maxRetries} - chờ {$waitMs}ms rồi retry...");
+                usleep($waitMs * 1000);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Áp dụng bulk update cho danh sách orders
+     * Group theo cùng updateData để giảm số lượng DB queries
+     */
+    protected function applyBulkStatusUpdates(array $bulkUpdates): void
+    {
+        if (empty($bulkUpdates)) {
+            return;
+        }
+
+        // Group theo data giống nhau để update 1 query nhiều rows
+        $grouped = [];
+        foreach ($bulkUpdates as $item) {
+            $key = md5(json_encode($item['data']));
+            $grouped[$key]['data'] = $item['data'];
+            $grouped[$key]['ids'][] = $item['id'];
+            $grouped[$key]['provider_status'] = $item['provider_status'];
+        }
+
+        foreach ($grouped as $group) {
+            try {
+                Order::whereIn('id', $group['ids'])->update($group['data']);
+
+                $status = $group['data']['status'] ?? '?';
+                $ids = implode(',', $group['ids']);
+                $this->info("  Updated " . count($group['ids']) . " orders -> {$group['provider_status']} -> {$status} (ids: {$ids})");
+                Log::info("PlaceOrder STATUS bulk: " . count($group['ids']) . " orders -> {$status}", ['ids' => $group['ids']]);
+            } catch (\Exception $e) {
+                $this->error("Bulk update error: {$e->getMessage()}");
+                Log::error("PlaceOrder STATUS bulk update: {$e->getMessage()}", ['ids' => $group['ids']]);
+            }
         }
     }
 
