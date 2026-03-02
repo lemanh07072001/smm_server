@@ -269,6 +269,24 @@ class PlaceOrder extends Command
                     continue;
                 }
 
+                // Log + lọc bỏ các provider_order_id không hợp lệ (không phải số nguyên)
+                $invalidIds = array_filter($providerOrderIds, fn($id) => !ctype_digit((string) $id));
+                if (!empty($invalidIds)) {
+                    foreach ($invalidIds as $badId) {
+                        $badOrder = $orderMap->get($badId);
+                        $this->warn("Order #{$badOrder?->id} có provider_order_id không hợp lệ: '{$badId}' → bỏ qua");
+                        Log::warning("PlaceOrder STATUS: invalid provider_order_id", [
+                            'order_id'          => $badOrder?->id,
+                            'provider_order_id' => $badId,
+                        ]);
+                    }
+                    $providerOrderIds = array_values(array_filter($providerOrderIds, fn($id) => ctype_digit((string) $id)));
+                }
+
+                if (empty($providerOrderIds)) {
+                    continue;
+                }
+
                 // Circuit breaker: provider đang down → bỏ qua phần còn lại
                 if ($consecutiveFails >= $circuitBreakerLimit) {
                     $remaining = $orders->count() - ($chunks->search($chunk) * $apiBatchSize);
@@ -342,13 +360,15 @@ class PlaceOrder extends Command
                             $updateData['remains'] = $statusData['remains'];
                         }
                         if (!empty($statusData['status'])) {
-                            // Dùng provider's mapProviderStatus để convert raw status (vd: "In progress" -> "in_progress")
-                            $updateData['status'] = $providerService->mapProviderStatus($statusData['status']);
+                            $mappedStatus = $providerService->mapProviderStatus($statusData['status']);
+                            $updateData['status'] = $mappedStatus;
+                            $this->line("  Order #{$order->id} | provider_id: {$providerOrderId} | raw: '{$statusData['status']}' → mapped: '{$mappedStatus}'");
                         }
                         // Lỗi per-order từ provider (vd: "Incorrect order id")
                         if (!empty($statusData['error'])) {
                             $updateData['status'] = Order::STATUS_FAILED;
                             $updateData['note']   = $statusData['error'];
+                            $this->warn("  Order #{$order->id} | provider_id: {$providerOrderId} | error: '{$statusData['error']}'");
                         }
 
                         if (!empty($updateData)) {
