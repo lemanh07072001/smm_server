@@ -63,12 +63,22 @@ class TraoDoiTuongTacProvider extends BaseProvider
         try {
             $response = Http::timeout(10)->asForm()->post($url, $body);
 
-            return [
+            $result = [
                 'success'     => $response->successful(),
                 'status_code' => $response->status(),
                 'body'        => $response->body(),
                 'data'        => $response->json() ?? [],
             ];
+
+            Log::info('TraoDoiTuongTac getOrderStatus', [
+                'order_ids'   => is_array($orderIds) ? $orderIds : [$orderIds],
+                'request'     => $body,
+                'status_code' => $result['status_code'],
+                'raw_body'    => $result['body'],
+                'parsed_data' => $result['data'],
+            ]);
+
+            return $result;
         } catch (\Exception $e) {
             Log::error('TraoDoiTuongTac Status Error', [
                 'provider' => $this->provider->code,
