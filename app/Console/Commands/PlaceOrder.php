@@ -297,14 +297,6 @@ class PlaceOrder extends Command
                         context: "Provider {$provider->code} batch status"
                     );
 
-                    Log::info('STATUS response', [
-                        'provider' => $provider->code,
-                        'sent_ids' => $providerOrderIds,
-                        'success'  => $statusResponse['success'] ?? null,
-                        'body'     => $statusResponse['body'] ?? null,
-                        'data'     => $statusResponse['data'] ?? null,
-                    ]);
-
                     if ($statusResponse === null || !($statusResponse['success'] ?? false)) {
                         $body = $statusResponse['body'] ?? 'Unknown';
                         $this->warn("Provider {$provider->code}: Lỗi sau retry - {$body}. Bỏ qua " . count($providerOrderIds) . " orders.");
@@ -345,11 +337,17 @@ class PlaceOrder extends Command
                             $mappedStatus = $providerService->mapProviderStatus($statusData['status']);
                             $updateData['status'] = $mappedStatus;
                             $this->line("  Order #{$order->id} | provider_id: {$providerOrderId} | raw: '{$statusData['status']}' → mapped: '{$mappedStatus}'");
+                            OrderActivityLogger::for($order->id)
+                                ->provider($provider->code, $providerOrderId)
+                                ->statusResponse($statusData);
                         }
                         // Lỗi per-order từ provider (vd: "Incorrect order id")
                         if (!empty($statusData['error'])) {
                             $updateData['status'] = Order::STATUS_FAILED;
                             $this->warn("  Order #{$order->id} | provider_id: {$providerOrderId} | error: '{$statusData['error']}'");
+                            OrderActivityLogger::for($order->id)
+                                ->provider($provider->code, $providerOrderId)
+                                ->error($statusData['error']);
                         }
 
                         if (!empty($updateData)) {
