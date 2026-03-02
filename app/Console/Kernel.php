@@ -40,10 +40,7 @@ class Kernel extends ConsoleKernel
             ->runInBackground()
             ->everyFiveMinutes()
             ->withoutOverlapping()
-            ->appendOutputTo(storage_path('logs/place-order-status.log'))
-            ->onFailure(function () {
-                \Illuminate\Support\Facades\Log::error('order_place status: schedule failed');
-            });
+            ->appendOutputTo(storage_path('logs/place-order-status.log'));
 
         // Thống kê đơn hàng mỗi 10 phút
         $schedule->command('report:order')
