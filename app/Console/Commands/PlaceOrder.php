@@ -196,7 +196,7 @@ class PlaceOrder extends Command
         // Chỉ check orders đang active (đã gửi lên provider, chưa hoàn thành)
         $activeStatuses = [
             Order::STATUS_IN_PROGRESS,
-            Order::STATUS_PROCESSING,
+            Order::STATUS_PENDING,
         ];
 
         $totalCount = Order::whereIn('status', $activeStatuses)
