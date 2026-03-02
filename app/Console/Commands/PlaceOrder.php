@@ -325,7 +325,8 @@ class PlaceOrder extends Command
                         }
 
                         if (!$statusData) {
-                            $this->warn("Order #{$order->id} (provider: {$providerOrderId}): Không có status trong response.");
+                            $this->warn("Order #{$order->id} (provider: {$providerOrderId}): Không có status trong response → STATUS_FAILED.");
+                            $bulkUpdates[] = ['id' => $order->id, 'data' => ['status' => Order::STATUS_FAILED], 'provider_status' => 'no_response'];
                             continue;
                         }
 
