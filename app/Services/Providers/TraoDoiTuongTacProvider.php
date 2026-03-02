@@ -35,7 +35,9 @@ class TraoDoiTuongTacProvider extends BaseProvider
     public function getOrderIdFromResponse(array $response): ?string
     {
         $data = $response['data'] ?? [];
-        return $data['order'] ?? $data['id'] ?? null;
+        $orderId = $data['order'] ?? $data['id'] ?? null;
+        Log::info('getOrderIdFromResponse', ['data' => $data, 'order_id' => $orderId]);
+        return $orderId;
     }
 
     public function isSuccessResponse(array $response): bool

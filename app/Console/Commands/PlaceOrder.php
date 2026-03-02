@@ -313,6 +313,9 @@ class PlaceOrder extends Command
 
                     $parsedData = $providerService->parseStatusResponse($statusResponse);
 
+                    $this->line("SENT IDs: " . implode(', ', $providerOrderIds));
+                    $this->line("PARSED keys: " . implode(', ', array_keys($parsedData)));
+
                     // Dùng bulk update thay vì update từng row
                     $bulkUpdates = [];
 
