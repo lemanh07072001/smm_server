@@ -53,48 +53,6 @@ class TraoDoiTuongTacProvider extends BaseProvider
     }
 
     /**
-     * Override getOrderStatus để dùng asForm() vì API yêu cầu form-encoded body
-     */
-    public function getOrderStatus(string|array $orderIds): array
-    {
-        $url  = $this->buildApiUrl();
-        $body = $this->buildStatusBody($orderIds);
-
-        try {
-            $response = Http::timeout(10)->asForm()->post($url, $body);
-
-            $result = [
-                'success'     => $response->successful(),
-                'status_code' => $response->status(),
-                'body'        => $response->body(),
-                'data'        => $response->json() ?? [],
-            ];
-
-            Log::info('TraoDoiTuongTac getOrderStatus', [
-                'order_ids'   => is_array($orderIds) ? $orderIds : [$orderIds],
-                'request'     => $body,
-                'status_code' => $result['status_code'],
-                'raw_body'    => $result['body'],
-                'parsed_data' => $result['data'],
-            ]);
-
-            return $result;
-        } catch (\Exception $e) {
-            Log::error('TraoDoiTuongTac Status Error', [
-                'provider' => $this->provider->code,
-                'error'    => $e->getMessage(),
-            ]);
-
-            return [
-                'success'     => false,
-                'status_code' => 0,
-                'body'        => $e->getMessage(),
-                'data'        => [],
-            ];
-        }
-    }
-
-    /**
      * Override canceledOrder để xử lý riêng cho Trao Đổi Tương Tác
      * API yêu cầu: JSON body, field "orders"
      */
