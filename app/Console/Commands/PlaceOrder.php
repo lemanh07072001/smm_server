@@ -325,13 +325,9 @@ class PlaceOrder extends Command
 
                     $consecutiveFails = 0; // reset khi thành công
 
-                    // In raw response ra console theo từng order ID
+                    // In raw response ra console
                     $rawData = $statusResponse['data'] ?? [];
-                    foreach ($providerOrderIds as $pid) {
-                        $orderRes = $rawData[$pid] ?? $rawData; // flat hoặc nested
-                        $this->line("ID: {$pid}");
-                        $this->line("RES: " . json_encode($orderRes, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-                    }
+                    $this->line("RAW: " . json_encode($rawData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
                     $parsedData = $providerService->parseStatusResponse($statusResponse);
 
