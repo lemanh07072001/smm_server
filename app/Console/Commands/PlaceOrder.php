@@ -309,7 +309,14 @@ class PlaceOrder extends Command
 
                     // In raw response ra console
                     $rawData = $statusResponse['data'] ?? [];
-                    $this->line("RAW: " . json_encode($rawData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                    Log::info('STATUS raw response', [
+                        'provider'          => $provider->code,
+                        'sent_ids'          => $providerOrderIds,
+                        'raw_body'          => $statusResponse['body'] ?? null,
+                        'raw_data'          => $rawData,
+                        'request_order_id'  => $statusResponse['request_order_id'] ?? null,
+                        'request_order_ids' => $statusResponse['request_order_ids'] ?? null,
+                    ]);
 
                     $parsedData = $providerService->parseStatusResponse($statusResponse);
 
