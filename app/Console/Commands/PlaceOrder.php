@@ -326,7 +326,7 @@ class PlaceOrder extends Command
 
                         if (!$statusData) {
                             $this->warn("Order #{$order->id} (provider: {$providerOrderId}): Không có status trong response → STATUS_FAILED.");
-                            $bulkUpdates[] = ['id' => $order->id, 'data' => ['status' => Order::STATUS_FAILED, 'error_message' => 'Không có status trong response từ provider'], 'provider_status' => 'no_response'];
+                            $bulkUpdates[] = ['id' => $order->id, 'data' => ['status' => Order::STATUS_FAILED], 'provider_status' => 'no_response'];
                             continue;
                         }
 
@@ -346,7 +346,6 @@ class PlaceOrder extends Command
                         // Lỗi per-order từ provider (vd: "Incorrect order id")
                         if (!empty($statusData['error'])) {
                             $updateData['status'] = Order::STATUS_FAILED;
-                            $updateData['error_message']   = $statusData['error'];
                             $this->warn("  Order #{$order->id} | provider_id: {$providerOrderId} | error: '{$statusData['error']}'");
                         }
 
@@ -563,7 +562,7 @@ class PlaceOrder extends Command
         try {
             $order->update([
                 'status'        => Order::STATUS_FAILED,
-                'error_message' => $errorMessage,
+                'note' => $errorMessage,
                 'retry_count'   => $retryCount,
             ]);
 
@@ -708,7 +707,7 @@ class PlaceOrder extends Command
         try {
             $order->update([
                 'status'        => Order::STATUS_FAILED,
-                'error_message' => $errorMessage,
+                'note' => $errorMessage,
             ]);
 
             DB::commit();
