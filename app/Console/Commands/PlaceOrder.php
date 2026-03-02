@@ -200,7 +200,9 @@ class PlaceOrder extends Command
 
         $totalCount = Order::whereNotIn('status', $statusFilter)
             ->whereNotNull('provider_order_id')
-            ->count();
+            ->get();
+
+            logger($totalCount);
 
         if ($totalCount === 0) {
             $this->info('Không có order nào cần kiểm tra trạng thái.');
