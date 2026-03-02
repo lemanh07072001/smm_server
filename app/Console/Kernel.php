@@ -28,10 +28,10 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('checkbank.txt'));
 
-        // Quét orders STATUS_PENDING chưa được đẩy vào queue mỗi 5 phút
+        // Quét orders STATUS_PENDING chưa được đẩy vào queue mỗi 1 phút
         $schedule->command('order_place scan')
             ->runInBackground()
-            ->everyFiveMinutes()
+            ->everyMinute()
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/place-order-scan.log'));
 
