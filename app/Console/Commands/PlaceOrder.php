@@ -200,6 +200,7 @@ class PlaceOrder extends Command
 
         $totalCount = Order::whereNotIn('status', $statusFilter)
             ->whereNotNull('provider_order_id')
+            ->limit(10)
             ->get();
 
             dd($totalCount);
