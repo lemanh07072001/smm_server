@@ -202,7 +202,7 @@ class PlaceOrder extends Command
             ->whereNotNull('provider_order_id')
             ->get();
 
-            logger($totalCount);
+            dd($totalCount);
 
         if ($totalCount === 0) {
             $this->info('Không có order nào cần kiểm tra trạng thái.');
