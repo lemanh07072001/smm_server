@@ -16,10 +16,18 @@ class StoreServiceRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        $merge = [];
+
         if ($this->has('is_active')) {
-            $this->merge([
-                'is_active' => filter_var($this->is_active, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $this->is_active,
-            ]);
+            $merge['is_active'] = filter_var($this->is_active, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $this->is_active;
+        }
+
+        if ($this->input('group_id') !== 'fb_reaction') {
+            $merge['reaction_types'] = null;
+        }
+
+        if (!empty($merge)) {
+            $this->merge($merge);
         }
     }
 
