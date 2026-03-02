@@ -353,6 +353,11 @@ class PlaceOrder extends Command
                             // Dùng provider's mapProviderStatus để convert raw status (vd: "In progress" -> "in_progress")
                             $updateData['status'] = $providerService->mapProviderStatus($statusData['status']);
                         }
+                        // Lỗi per-order từ provider (vd: "Incorrect order id")
+                        if (!empty($statusData['error'])) {
+                            $updateData['status'] = Order::STATUS_FAILED;
+                            $updateData['note']   = $statusData['error'];
+                        }
 
                         if (!empty($updateData)) {
                             $bulkUpdates[] = ['id' => $order->id, 'data' => $updateData, 'provider_status' => $statusData['status'] ?? '?'];

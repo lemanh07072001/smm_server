@@ -181,7 +181,21 @@ class TraoDoiTuongTacProvider extends BaseProvider
         }
 
         // Trường hợp batch (nested): {"14204384": {"status": "...", ...}, "14204385": {...}}
+        // Hoặc lỗi per-order: {"14046545": "Incorrect order id"}
         foreach ($data as $orderId => $orderData) {
+            if (is_string($orderData)) {
+                // Lỗi per-order: value là string error message
+                $result[(string) $orderId] = [
+                    'provider_order_id' => (string) $orderId,
+                    'status'      => 'failed',
+                    'error'       => $orderData,
+                    'start_count' => 0,
+                    'remains'     => 0,
+                    'charge'      => 0,
+                    'currency'    => 'VND',
+                ];
+                continue;
+            }
             if (!is_array($orderData)) {
                 continue;
             }
