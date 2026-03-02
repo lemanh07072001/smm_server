@@ -147,18 +147,29 @@ class TraoDoiTuongTacProvider extends BaseProvider
     public function parseStatusResponse(array $response): array
     {
         $data = $response['data'] ?? [];
+
+        Log::info('TraoDoiTuongTac parseStatusResponse', [
+            'raw_data'   => $data,
+            'data_keys'  => array_keys((array) $data),
+            'data_count' => count((array) $data),
+        ]);
+
         $result = [];
 
         foreach ($data as $orderId => $orderData) {
             $result[$orderId] = [
                 'provider_order_id' => $orderId,
-                'status' => $orderData['status'] ?? null,
+                'status'      => $orderData['status'] ?? null,
                 'start_count' => $orderData['start_count'] ?? 0,
-                'remains' => $orderData['remains'] ?? 0,
-                'charge' => $orderData['charge'] ?? 0,
-                'currency' => $orderData['currency'] ?? 'VND',
+                'remains'     => $orderData['remains'] ?? 0,
+                'charge'      => $orderData['charge'] ?? 0,
+                'currency'    => $orderData['currency'] ?? 'VND',
             ];
         }
+
+        Log::info('TraoDoiTuongTac parseStatusResponse result', [
+            'result_keys' => array_keys($result),
+        ]);
 
         return $result;
     }
