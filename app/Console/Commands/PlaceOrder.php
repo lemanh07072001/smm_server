@@ -307,23 +307,15 @@ class PlaceOrder extends Command
 
                     $consecutiveFails = 0; // reset khi thành công
 
-                    Log::info('STATUS raw response', [
-                        'provider'          => $provider->code,
-                        'order_ids'         => $providerOrderIds,
-                        'raw_body'          => $statusResponse['body'] ?? null,
-                        'raw_data'          => $statusResponse['data'] ?? null,
-                        'request_order_id'  => $statusResponse['request_order_id'] ?? null,
-                        'request_order_ids' => $statusResponse['request_order_ids'] ?? null,
-                    ]);
+                    // In raw response ra console theo từng order ID
+                    $rawData = $statusResponse['data'] ?? [];
+                    foreach ($providerOrderIds as $pid) {
+                        $orderRes = $rawData[$pid] ?? $rawData; // flat hoặc nested
+                        $this->line("ID: {$pid}");
+                        $this->line("RES: " . json_encode($orderRes, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+                    }
 
                     $parsedData = $providerService->parseStatusResponse($statusResponse);
-
-                    Log::info('STATUS parsed data', [
-                        'provider'    => $provider->code,
-                        'order_ids'   => $providerOrderIds,
-                        'parsed_keys' => array_keys($parsedData),
-                        'parsed_data' => $parsedData,
-                    ]);
 
                     // Dùng bulk update thay vì update từng row
                     $bulkUpdates = [];
