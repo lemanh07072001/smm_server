@@ -3,8 +3,6 @@
 namespace App\Console;
 
 use App\Console\Commands\CheckBank;
-use App\Console\Commands\CheckOrderStatus;
-use App\Console\Commands\GenerateDashboardReport;
 use App\Console\Commands\GenerateOrderReport;
 use App\Console\Commands\GenerateUserFinancialReport;
 use Illuminate\Console\Scheduling\Schedule;
@@ -14,7 +12,6 @@ class Kernel extends ConsoleKernel
 {
     protected $commands = [
         CheckBank::class,
-        CheckOrderStatus::class,
         GenerateOrderReport::class,
         GenerateUserFinancialReport::class,
     ];
