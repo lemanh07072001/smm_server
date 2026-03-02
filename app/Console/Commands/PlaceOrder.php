@@ -193,17 +193,15 @@ class PlaceOrder extends Command
         $chunkSize = 500;
         $processed = 0;
 
-        $statusFilter = [
-            Order::STATUS_PENDING,
-
+        // Chỉ check orders đang active (đã gửi lên provider, chưa hoàn thành)
+        $activeStatuses = [
+            Order::STATUS_IN_PROGRESS,
+            Order::STATUS_PROCESSING,
         ];
 
-        $totalCount = Order::whereNotIn('status', $statusFilter)
+        $totalCount = Order::whereIn('status', $activeStatuses)
             ->whereNotNull('provider_order_id')
-            ->limit(10)
-            ->get();
-
-            dd($totalCount);
+            ->count();
 
         if ($totalCount === 0) {
             $this->info('Không có order nào cần kiểm tra trạng thái.');
@@ -213,7 +211,7 @@ class PlaceOrder extends Command
         $this->info("Tìm thấy {$totalCount} orders cần kiểm tra.");
 
         Order::with(['service.providerService.provider'])
-            ->whereNotIn('status', $statusFilter)
+            ->whereIn('status', $activeStatuses)
             ->whereNotNull('provider_order_id')
             ->orderBy('id')
             ->chunk($chunkSize, function ($orders) use (&$processed, $totalCount) {
