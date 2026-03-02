@@ -46,10 +46,42 @@ class TraoDoiTuongTacProvider extends BaseProvider
     protected function buildStatusBody(string|array $orderIds): array
     {
         return [
-            'key' => $this->provider->api_key,
+            'key'    => $this->provider->api_key,
             'action' => 'status',
-            'order' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
+            'order'  => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
         ];
+    }
+
+    /**
+     * Override getOrderStatus để dùng asForm() vì API yêu cầu form-encoded body
+     */
+    public function getOrderStatus(string|array $orderIds): array
+    {
+        $url  = $this->buildApiUrl();
+        $body = $this->buildStatusBody($orderIds);
+
+        try {
+            $response = Http::timeout(10)->asForm()->post($url, $body);
+
+            return [
+                'success'     => $response->successful(),
+                'status_code' => $response->status(),
+                'body'        => $response->body(),
+                'data'        => $response->json() ?? [],
+            ];
+        } catch (\Exception $e) {
+            Log::error('TraoDoiTuongTac Status Error', [
+                'provider' => $this->provider->code,
+                'error'    => $e->getMessage(),
+            ]);
+
+            return [
+                'success'     => false,
+                'status_code' => 0,
+                'body'        => $e->getMessage(),
+                'data'        => [],
+            ];
+        }
     }
 
     /**
