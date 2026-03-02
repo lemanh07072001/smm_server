@@ -42,10 +42,12 @@ use Illuminate\Support\Facades\Route;
 // });
 
 // Public routes
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login'])->name('login');
-Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
-Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+Route::middleware('throttle:auth')->group(function () {
+    Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/login', [AuthController::class, 'login'])->name('login');
+    Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+});
 Route::get('/categories/all', [CategoryController::class, 'all']);
 Route::get('/category-groups/all', [CategoryGroupController::class, 'all']);
 Route::get('/category-groups/get-all', [CategoryGroupController::class, 'getAll']);
