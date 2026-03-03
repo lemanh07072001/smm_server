@@ -19,7 +19,14 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['http://localhost:3000', 'https://tangfollowvn.com', 'https://api.tangfollowvn.com','https://k-cosmicsocial.com','https://sieuthismm.com'],
+    'allowed_origins' => [
+        'http://localhost:3000', 
+        'https://tangfollowvn.com', 
+        'https://api.tangfollowvn.com',
+        'https://k-cosmicsocial.com',
+        'https://sieuthismm.com',
+        'https://api.sieuthismm.com'
+    ],
 
     'allowed_origins_patterns' => [],
 
