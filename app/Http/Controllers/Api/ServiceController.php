@@ -234,6 +234,11 @@ class ServiceController extends Controller
                 $query->where('category_group_id', $categoryGroupId);
             }
 
+            // Only include services whose provider is active
+            $query->whereHas('providerService.provider', function ($q) {
+                $q->where('is_active', true);
+            });
+
             $services = $query->get();
 
             return [

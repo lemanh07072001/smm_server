@@ -9,6 +9,7 @@ use App\Models\Provider;
 use App\Services\ImageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class ProviderController extends Controller
 {
@@ -86,6 +87,13 @@ class ProviderController extends Controller
 
         $provider->update($data);
         $provider->makeVisible('api_key');
+
+        // Clear services cache so provider is_active changes take effect immediately
+        $cacheKeys = Cache::get('services_cache_keys', []);
+        foreach ($cacheKeys as $key) {
+            Cache::forget($key);
+        }
+        Cache::forget('services_cache_keys');
 
         return response()->json([
             'message' => 'Cập nhật provider thành công.',
