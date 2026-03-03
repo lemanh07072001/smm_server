@@ -192,13 +192,27 @@ class OrderController extends Controller
 
         // Lấy Service với ProviderService và Provider (nested relationship)
         $service = Service::with(['providerService.provider'])
+            ->where('id', $validated['service_id'])
             ->where('provider_service_id', $validated['provider_service_id'])
+            ->where('is_active', 1)
             ->first();
 
         if (!$service) {
             return response()->json([
-                'message' => 'Service không tồn tại.',
+                'message' => 'Service không tồn tại hoặc đã bị tắt.',
             ], 404);
+        }
+
+        $blockedStatuses = [
+            Service::SERVICE_STATUS_MAINTENANCE => 'Dịch vụ đang bảo trì, vui lòng thử lại sau.',
+            Service::SERVICE_STATUS_STOPPED     => 'Dịch vụ đang tạm dừng, vui lòng thử lại sau.',
+            Service::SERVICE_STATUS_ERROR       => 'Dịch vụ đang lỗi, vui lòng thử lại sau.',
+        ];
+
+        if (isset($blockedStatuses[$service->service_status])) {
+            return response()->json([
+                'message' => $blockedStatuses[$service->service_status],
+            ], 422);
         }
 
         // Validate quantity theo giới hạn của service
@@ -221,6 +235,12 @@ class OrderController extends Controller
             return response()->json([
                 'message' => 'Provider không tồn tại.',
             ], 404);
+        }
+
+        if (!$provider->is_active) {
+            return response()->json([
+                'message' => 'Nhà cung cấp dịch vụ hiện không hoạt động.',
+            ], 422);
         }
 
         // Kiểm tra provider có được hỗ trợ không
