@@ -117,22 +117,7 @@ class ServiceController extends Controller
         $service = Service::findOrFail($id);
         $data = $request->validated();
 
-        Log::info('Update service data', [
-            'id' => $id,
-            'validated' => $data,
-            'raw_agent_price' => $request->input('agent_price'),
-        ]);
-
         $service->update($data);
-        $service->refresh();
-
-        Log::info('After update service', [
-            'id' => $id,
-            'agent_price_in_db' => $service->agent_price,
-            'dirty' => $service->getDirty(),
-            'changes' => $service->getChanges(),
-        ]);
-
         $service->load(['categoryGroup', 'providerService']);
 
         // Clear cache after updating service
