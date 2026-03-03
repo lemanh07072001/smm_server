@@ -58,6 +58,10 @@ class UserController extends Controller
 
     public function store(StoreUserRequest $request): JsonResponse
     {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
         $data = $request->validated();
         $data['password'] = Hash::make($data['password']);
 
@@ -69,8 +73,12 @@ class UserController extends Controller
         ], 201);
     }
 
-    public function show(int $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
         $user = User::findOrFail($id);
 
         return response()->json([
@@ -80,6 +88,10 @@ class UserController extends Controller
 
     public function update(UpdateUserRequest $request, int $id): JsonResponse
     {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
         $user = User::findOrFail($id);
         $data = $request->validated();
 
@@ -98,8 +110,12 @@ class UserController extends Controller
         ]);
     }
 
-    public function destroy(int $id): JsonResponse
+    public function destroy(Request $request, int $id): JsonResponse
     {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
         $user = User::findOrFail($id);
         $user->delete();
 
@@ -110,6 +126,10 @@ class UserController extends Controller
 
     public function destroyMultiple(Request $request): JsonResponse
     {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
         $request->validate([
             'ids' => ['required', 'array', 'min:1'],
             'ids.*' => ['required', 'integer', 'exists:users,id'],
@@ -124,6 +144,10 @@ class UserController extends Controller
 
     public function resetPassword(Request $request, int $id): JsonResponse
     {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
         $request->validate([
             'password' => ['required', 'string', 'min:6'],
         ], [
@@ -141,8 +165,12 @@ class UserController extends Controller
         ]);
     }
 
-    public function generateApiKey(int $id): JsonResponse
+    public function generateApiKey(Request $request, int $id): JsonResponse
     {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
         $user = User::findOrFail($id);
         $apiKey = Str::random(64);
 
@@ -165,6 +193,10 @@ class UserController extends Controller
      */
     public function adjustBalance(Request $request, int $id): JsonResponse
     {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized.'], 403);
+        }
+
         $request->validate([
             'amount' => ['required', 'numeric', 'gt:0'],
             'type' => ['required', 'string', 'in:deposit,charge,refund,adjustment,withdraw'],

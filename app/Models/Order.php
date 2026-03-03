@@ -55,6 +55,7 @@ class Order extends Model
         'link',
         'quantity',
         'comments',
+        'internal_note',
         'start_count',
         'remains',
         'status',
