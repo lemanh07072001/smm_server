@@ -124,6 +124,15 @@ class ServiceController extends Controller
         ]);
 
         $service->update($data);
+        $service->refresh();
+
+        Log::info('After update service', [
+            'id' => $id,
+            'agent_price_in_db' => $service->agent_price,
+            'dirty' => $service->getDirty(),
+            'changes' => $service->getChanges(),
+        ]);
+
         $service->load(['categoryGroup', 'providerService']);
 
         // Clear cache after updating service
