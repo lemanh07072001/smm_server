@@ -170,6 +170,10 @@ class Service extends Model
 
     public function getPriceForUser(User $user): float
     {
+        if ($user->role === User::ROLE_RESELLER && $this->agent_price !== null) {
+            return (float) $this->agent_price;
+        }
+
         return (float) $this->sell_rate;
     }
 
