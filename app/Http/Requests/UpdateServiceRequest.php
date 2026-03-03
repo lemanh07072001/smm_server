@@ -46,7 +46,7 @@ class UpdateServiceRequest extends FormRequest
             'name' => ['sometimes', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'sell_rate' => ['sometimes', 'numeric', 'min:0'],
-            'agent_price' => ['nullable',  'min:0'],
+            'agent_price' => ['nullable', 'numeric', 'min:0', 'lte:sell_rate'],
             'min_quantity' => ['sometimes', 'integer', 'min:1'],
             'max_quantity' => ['sometimes', 'integer', 'min:1'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
@@ -76,6 +76,7 @@ class UpdateServiceRequest extends FormRequest
             'min_quantity.min' => 'Số lượng tối thiểu phải lớn hơn hoặc bằng 1.',
             'max_quantity.integer' => 'Số lượng tối đa phải là số nguyên.',
             'max_quantity.min' => 'Số lượng tối đa phải lớn hơn hoặc bằng 1.',
+            'agent_price.lte' => 'Giá đại lý không được cao hơn giá bán.',
             'is_active.boolean' => 'Trạng thái phải là true hoặc false.',
             'platform.in' => 'Platform không hợp lệ. Phải là: 1 (Facebook), 2 (Tiktok), 3 (Twitter), 4 (Instagram), 5 (Youtube), 6 (Zalo).',
         ];

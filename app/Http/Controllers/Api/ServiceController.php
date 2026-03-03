@@ -116,6 +116,12 @@ class ServiceController extends Controller
         $service = Service::findOrFail($id);
         $data = $request->validated();
 
+        Log::info('Update service data', [
+            'id' => $id,
+            'validated' => $data,
+            'raw_agent_price' => $request->input('agent_price'),
+        ]);
+
         $service->update($data);
         $service->load(['categoryGroup', 'providerService']);
 
