@@ -51,6 +51,7 @@ class StoreServiceRequest extends FormRequest
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'priority' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
+            'service_status' => ['nullable', 'integer', 'in:0,1,2,3,4'],
             'allow_multiple_reactions' => ['nullable', 'boolean'],
             'reaction_types' => ['nullable', 'array'],
             'reaction_types.*' => ['string'],
