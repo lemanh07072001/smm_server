@@ -45,6 +45,7 @@ class StoreServiceRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'sell_rate' => ['required', 'numeric', 'min:0'],
+            'agent_price' => ['nullable', 'numeric', 'min:0'],
             'min_quantity' => ['required', 'integer', 'min:1'],
             'max_quantity' => ['required', 'integer', 'min:1', 'gte:min_quantity'],
             'sort_order' => ['nullable', 'integer', 'min:0'],

@@ -46,6 +46,7 @@ class UpdateServiceRequest extends FormRequest
             'name' => ['sometimes', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'sell_rate' => ['sometimes', 'numeric', 'min:0'],
+            'agent_price' => ['nullable', 'numeric', 'min:0'],
             'min_quantity' => ['sometimes', 'integer', 'min:1'],
             'max_quantity' => ['sometimes', 'integer', 'min:1'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
