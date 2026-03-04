@@ -51,7 +51,7 @@ class SmmKingProvider extends BaseProvider
         return [
             'key'    => $this->provider->api_key,
             'action' => 'status',
-            'order'  => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
+            'orders' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
         ];
     }
 
@@ -60,7 +60,7 @@ class SmmKingProvider extends BaseProvider
         return [
             'key'    => $this->provider->api_key,
             'action' => 'cancel',
-            'order'  => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
+            'orders' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
         ];
     }
 
