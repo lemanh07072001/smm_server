@@ -26,7 +26,7 @@ class Provider extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'balance' => 'decimal:6',
-        'balance_updated_at' => 'datetime',
+        'balance_updated_at' => 'datetime:Y-m-d H:i:s',
     ];
 
     public function services(): HasMany
