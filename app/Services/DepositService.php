@@ -14,6 +14,10 @@ use Illuminate\Support\Facades\Log;
 
 class DepositService
 {
+    const STATUS_SUCCESS          = 'success';
+    const STATUS_PENDING_DUPLICATE = 'pending_duplicate';
+    const STATUS_PENDING          = 'pending';
+
     /**
      * Tim user ID tu ma giao dich trong noi dung text.
      * Kiem tra Redis truoc, fallback sang regex parsing.
@@ -38,6 +42,263 @@ class DepositService
         }
 
         return null;
+    }
+
+    /**
+     * Parse mã giao dịch SMM từ nội dung chuyển khoản.
+     * Pattern: smm + date(8) + random(6) + user_id
+     */
+    public function extractTransactionCode(string $content): ?string
+    {
+        if (preg_match('/smm\d{8}.{6}\d+/i', $content, $matches)) {
+            return strtoupper($matches[0]);
+        }
+
+        return null;
+    }
+
+    /**
+     * Kiem tra giao dich trung lap theo tid.
+     * Tra ve BankAuto neu da ton tai, null neu chua.
+     */
+    public function findDuplicateTransaction(string $transactionId): ?BankAuto
+    {
+        return BankAuto::where('tid', $transactionId)->first();
+    }
+
+    /**
+     * @deprecated Dung findDuplicateTransaction thay the
+     */
+    public function isDuplicateTransaction(string $transactionId): bool
+    {
+        return BankAuto::where('tid', $transactionId)->exists();
+    }
+
+    /**
+     * Xu ly nap tien cho user.
+     * - Neu trung tid: luu bank_auto voi status pending_duplicate, KHONG cong tien
+     * - Neu khong trung: luu bank_auto status success + tao dongtien (cong tien)
+     */
+    public function processDeposit(
+        int $userId,
+        int $amount,
+        string $transactionId,
+        string $description,
+        ?string $time,
+        array $rawData,
+        string $source = 'macrodroid'
+    ): array {
+        $transactionCode = $this->extractTransactionCode($description);
+
+        // Kiem tra trung lap
+        $existing = $this->findDuplicateTransaction($transactionId);
+        if ($existing) {
+            // Luu lai voi trang thai cho admin kiem tra
+            $bankAuto = BankAuto::create([
+                'tid'              => $transactionId . '_DUP_' . uniqid(),
+                'transaction_code' => $transactionCode,
+                'description'      => $description,
+                'date'             => $time ?? now()->format('Y-m-d H:i:s'),
+                'data'             => json_encode($rawData),
+                'amount'           => $amount,
+                'type'             => 'bank',
+                'deposit_type'     => $source,
+                'user_id'          => $userId,
+                'status'           => self::STATUS_PENDING_DUPLICATE,
+                'note'             => "Trùng giao dịch với bank_auto #{$existing->id} (tid: {$transactionId})",
+            ]);
+
+            Log::warning('Duplicate transaction saved for admin review', [
+                'tid'          => $transactionId,
+                'bank_auto_id' => $bankAuto->id,
+                'user_id'      => $userId,
+                'amount'       => $amount,
+            ]);
+
+            return [
+                'success'      => false,
+                'duplicate'    => true,
+                'bank_auto_id' => $bankAuto->id,
+                'message'      => 'Trùng giao dịch, lưu chờ admin duyệt',
+            ];
+        }
+
+        DB::beginTransaction();
+        try {
+            $user = User::find($userId);
+            if (!$user) {
+                DB::rollBack();
+                return ['success' => false, 'message' => 'User không tồn tại'];
+            }
+
+            $bankAuto = BankAuto::create([
+                'tid'              => $transactionId,
+                'transaction_code' => $transactionCode,
+                'description'      => $description,
+                'date'             => $time ?? now()->format('Y-m-d H:i:s'),
+                'data'             => json_encode($rawData),
+                'amount'           => $amount,
+                'type'             => 'bank',
+                'deposit_type'     => $source,
+                'user_id'          => $userId,
+                'status'           => self::STATUS_SUCCESS,
+            ]);
+
+            $noidung = match ($source) {
+                'sepay'  => 'Nạp tiền thành công (SePay)',
+                'pay2s'  => 'Nạp tiền thành công (Pay2s)',
+                default  => 'Nạp tiền thành công (Macrodroid)',
+            };
+
+            $dongtien = Dongtien::createTransaction(
+                $user,
+                $amount,
+                Dongtien::TYPE_DEPOSIT,
+                $noidung,
+                [
+                    'thoigian'       => $time ? date('Y-m-d H:i:s', strtotime($time)) : now(),
+                    'payment_method' => 'bank',
+                    'payment_ref'    => $transactionId,
+                    'datas'          => json_encode($rawData),
+                    'bank_auto_id'   => $bankAuto->id,
+                ]
+            );
+
+            $this->cleanupTransactionCode($description);
+
+            if ($dongtien) {
+                broadcast(new DepositSuccess($dongtien));
+            }
+
+            DB::commit();
+
+            Log::info("{$source} deposit success", [
+                'user_id'        => $userId,
+                'amount'         => $amount,
+                'transaction_id' => $transactionId,
+                'new_balance'    => $user->fresh()->balance,
+            ]);
+
+            return [
+                'success'     => true,
+                'new_balance' => $user->fresh()->balance,
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("{$source} deposit error", [
+                'user_id' => $userId,
+                'amount'  => $amount,
+                'error'   => $e->getMessage(),
+            ]);
+
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Luu giao dich pending (chua match duoc user).
+     */
+    public function savePendingDeposit(
+        string $transactionId,
+        string $description,
+        ?string $time,
+        int $amount,
+        array $rawData
+    ): BankAuto {
+        $transactionCode = $this->extractTransactionCode($description);
+
+        return BankAuto::create([
+            'tid'              => $transactionId,
+            'transaction_code' => $transactionCode,
+            'description'      => $description,
+            'date'             => $time ?? now()->format('Y-m-d H:i:s'),
+            'data'             => json_encode($rawData),
+            'amount'           => $amount,
+            'type'             => 'bank',
+            'deposit_type'     => 'pending',
+            'status'           => self::STATUS_PENDING,
+            'user_id'          => null,
+        ]);
+    }
+
+    /**
+     * Admin duyet giao dich pending_duplicate hoac pending.
+     * Cong tien va tao dongtien.
+     */
+    public function approveDeposit(BankAuto $bankAuto): array
+    {
+        if (!in_array($bankAuto->status, [self::STATUS_PENDING_DUPLICATE, self::STATUS_PENDING])) {
+            return ['success' => false, 'message' => 'Giao dịch không ở trạng thái chờ duyệt'];
+        }
+
+        if (!$bankAuto->user_id) {
+            return ['success' => false, 'message' => 'Giao dịch chưa có user, vui lòng gán user trước'];
+        }
+
+        DB::beginTransaction();
+        try {
+            $user = User::find($bankAuto->user_id);
+            if (!$user) {
+                DB::rollBack();
+                return ['success' => false, 'message' => 'User không tồn tại'];
+            }
+
+            $dongtien = Dongtien::createTransaction(
+                $user,
+                $bankAuto->amount,
+                Dongtien::TYPE_DEPOSIT,
+                'Nạp tiền thành công (Admin duyệt)',
+                [
+                    'thoigian'       => now(),
+                    'payment_method' => 'bank',
+                    'payment_ref'    => $bankAuto->tid,
+                    'bank_auto_id'   => $bankAuto->id,
+                ]
+            );
+
+            $bankAuto->update(['status' => self::STATUS_SUCCESS]);
+
+            if ($dongtien) {
+                broadcast(new DepositSuccess($dongtien));
+            }
+
+            DB::commit();
+
+            // Cleanup transaction code khỏi Redis/DB sau khi duyệt
+            if ($bankAuto->description) {
+                $this->cleanupTransactionCode($bankAuto->description);
+            }
+
+            return [
+                'success'     => true,
+                'new_balance' => $user->fresh()->balance,
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Admin approve deposit error', [
+                'bank_auto_id' => $bankAuto->id,
+                'error'        => $e->getMessage(),
+            ]);
+
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Admin tu choi giao dich.
+     */
+    public function rejectDeposit(BankAuto $bankAuto, string $reason = ''): array
+    {
+        if (!in_array($bankAuto->status, [self::STATUS_PENDING_DUPLICATE, self::STATUS_PENDING])) {
+            return ['success' => false, 'message' => 'Giao dịch không ở trạng thái chờ duyệt'];
+        }
+
+        $bankAuto->update([
+            'status' => 'rejected',
+            'note'   => $reason ?: $bankAuto->note,
+        ]);
+
+        return ['success' => true];
     }
 
     /**
@@ -73,127 +334,6 @@ class DepositService
         }
 
         return null;
-    }
-
-    /**
-     * Xu ly nap tien cho user.
-     *
-     * @param int $userId
-     * @param int $amount
-     * @param string $transactionId - Ma giao dich duy nhat
-     * @param string $description - Mo ta giao dich
-     * @param string|null $time - Thoi gian giao dich
-     * @param array $rawData - Du lieu goc de luu audit trail
-     * @param string $source - Nguon: 'macrodroid', 'sepay'
-     * @return array{success: bool, new_balance?: float, message?: string}
-     */
-    public function processDeposit(
-        int $userId,
-        int $amount,
-        string $transactionId,
-        string $description,
-        ?string $time,
-        array $rawData,
-        string $source = 'macrodroid'
-    ): array {
-        DB::beginTransaction();
-
-        try {
-            $user = User::find($userId);
-            if (!$user) {
-                DB::rollBack();
-                return ['success' => false, 'message' => 'User không tồn tại'];
-            }
-
-            $bankAuto = BankAuto::create([
-                'tid'          => $transactionId,
-                'description'  => $description,
-                'date'         => $time ?? now()->format('d/m/Y H:i:s'),
-                'data'         => json_encode($rawData),
-                'amount'       => $amount,
-                'type'         => 'bank',
-                'deposit_type' => 'auto',
-                'user_id'      => $userId,
-            ]);
-
-            $noidung = match ($source) {
-                'sepay'   => 'Nạp tiền thành công (SePay)',
-                default   => 'Nạp tiền thành công (Macrodroid)',
-            };
-
-            $dongtien = Dongtien::createTransaction(
-                $user,
-                $amount,
-                Dongtien::TYPE_DEPOSIT,
-                $noidung,
-                [
-                    'thoigian'       => $time ? date('Y-m-d H:i:s', strtotime($time)) : now(),
-                    'payment_method' => 'bank',
-                    'payment_ref'    => $transactionId,
-                    'datas'          => json_encode($rawData),
-                    'bank_auto_id'   => $bankAuto->id,
-                ]
-            );
-
-            $this->cleanupTransactionCode($description);
-
-            if ($dongtien) {
-                broadcast(new DepositSuccess($dongtien));
-            }
-
-            DB::commit();
-
-            Log::info("{$source} deposit success", [
-                'user_id' => $userId,
-                'amount' => $amount,
-                'transaction_id' => $transactionId,
-                'new_balance' => $user->fresh()->balance,
-            ]);
-
-            return [
-                'success' => true,
-                'new_balance' => $user->fresh()->balance,
-            ];
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error("{$source} deposit error", [
-                'user_id' => $userId,
-                'amount' => $amount,
-                'error' => $e->getMessage(),
-            ]);
-
-            return ['success' => false, 'message' => $e->getMessage()];
-        }
-    }
-
-    /**
-     * Luu giao dich pending (chua match duoc user).
-     */
-    public function savePendingDeposit(
-        string $transactionId,
-        string $description,
-        ?string $time,
-        int $amount,
-        array $rawData
-    ): BankAuto {
-        return BankAuto::create([
-            'tid'          => $transactionId,
-            'description'  => $description,
-            'date'         => $time ?? now()->format('d/m/Y H:i:s'),
-            'data'         => json_encode($rawData),
-            'amount'       => $amount,
-            'type'         => 'bank',
-            'deposit_type' => 'pending',
-            'user_id'      => null,
-        ]);
-    }
-
-    /**
-     * Kiem tra giao dich trung lap.
-     */
-    public function isDuplicateTransaction(string $transactionId): bool
-    {
-        return BankAuto::where('tid', $transactionId)->exists();
     }
 
     /**

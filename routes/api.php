@@ -4,7 +4,7 @@ use App\Http\Controllers\Api\AffiliateController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BankAutoController;
 use App\Http\Controllers\Api\CategoryController;
-use App\Http\Controllers\Api\SepayController;
+use App\Http\Controllers\Api\Pay2sController;
 use App\Http\Controllers\Api\CategoryGroupController;
 use App\Http\Controllers\Api\CodeTransactionController;
 use App\Http\Controllers\Api\CountryController;
@@ -35,11 +35,9 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Webhook routes (public - không cần auth, không giới hạn rate limit)
-// Route::withoutMiddleware('throttle:api')->group(function () {
-//     Route::post('/webhook/macrodroid', [BankAutoController::class, 'macrodroidWebhook']);
-//     Route::post('/webhook/macrodroid/test', [BankAutoController::class, 'testWebhook']);
-//     Route::post('/webhook/sepay', [SepayController::class, 'webhook'])->middleware('sepay.webhook');
-// });
+Route::withoutMiddleware('throttle:api')->group(function () {
+    Route::post('/webhook/pay2s', [Pay2sController::class, 'webhook']);
+});
 
 // Public routes
 Route::middleware('throttle:auth')->group(function () {
@@ -197,4 +195,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/affiliate/withdrawals/{id}/approve', [AffiliateController::class, 'approve']);
     Route::post('/admin/affiliate/withdrawals/{id}/reject', [AffiliateController::class, 'reject']);
 
+    // Admin Bank Auto
+    Route::post('/admin/bank-auto/{id}/approve', [BankAutoController::class, 'approve']);
+    Route::post('/admin/bank-auto/{id}/reject', [BankAutoController::class, 'reject']);
+
+});
+
+// Super Admin routes (dev only)
+Route::middleware(['auth:sanctum', 'super_admin'])->prefix('super-admin')->group(function () {
+    Route::get('/providers', [ProviderController::class, 'listSupport']);
+    Route::post('/providers/{id}/toggle-supported', [ProviderController::class, 'toggleSupported']);
 });
