@@ -5,7 +5,9 @@ namespace App\Console\Commands;
 use App\Helpers\OrderActivityLogger;
 use App\Helpers\RedisHelper;
 use App\Helpers\TelegramHelper;
+use App\Models\Dongtien;
 use App\Models\Order;
+use App\Models\User;
 use App\Services\Providers\ProviderFactory;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -435,12 +437,51 @@ class PlaceOrder extends Command
 
         foreach ($grouped as $group) {
             try {
-                Order::whereIn('id', $group['ids'])->update($group['data']);
+                $newStatus = $group['data']['status'] ?? null;
+                $isFailed = $newStatus === Order::STATUS_FAILED;
 
-                $status = $group['data']['status'] ?? '?';
+                // Nếu chuyển sang failed, cần load orders trước để lấy charge_amount
+                $ordersToRefund = $isFailed
+                    ? Order::whereIn('id', $group['ids'])->get()
+                    : collect();
+
+                Order::whereIn('id', $group['ids'])->update(
+                    $isFailed
+                        ? array_merge($group['data'], ['refund_amount' => DB::raw('charge_amount')])
+                        : $group['data']
+                );
+
+                // Hoàn tiền cho từng order failed
+                foreach ($ordersToRefund as $failedOrder) {
+                    $refundAmount = (float) $failedOrder->charge_amount;
+                    if ($refundAmount > 0) {
+                        DB::beginTransaction();
+                        try {
+                            $user = User::lockForUpdate()->find($failedOrder->user_id);
+                            if ($user) {
+                                Dongtien::createTransaction(
+                                    $user,
+                                    $refundAmount,
+                                    Dongtien::TYPE_REFUND,
+                                    "Hoàn tiền đơn hàng #{$failedOrder->id} thất bại",
+                                    ['order_id' => $failedOrder->id]
+                                );
+                                $this->info("  Order #{$failedOrder->id}: Đã hoàn tiền {$refundAmount} cho user #{$user->id}");
+                            }
+                            DB::commit();
+                        } catch (\Exception $e) {
+                            DB::rollBack();
+                            Log::error('Error refunding failed order (bulk status)', [
+                                'order_id' => $failedOrder->id,
+                                'error'    => $e->getMessage(),
+                            ]);
+                        }
+                    }
+                }
+
                 $ids = implode(',', $group['ids']);
-                $this->info("  Updated " . count($group['ids']) . " orders -> {$group['provider_status']} -> {$status} (ids: {$ids})");
-                Log::info("PlaceOrder STATUS bulk: " . count($group['ids']) . " orders -> {$status}", ['ids' => $group['ids']]);
+                $this->info("  Updated " . count($group['ids']) . " orders -> {$group['provider_status']} -> {$newStatus} (ids: {$ids})");
+                Log::info("PlaceOrder STATUS bulk: " . count($group['ids']) . " orders -> {$newStatus}", ['ids' => $group['ids']]);
             } catch (\Exception $e) {
                 $this->error("Bulk update error: {$e->getMessage()}");
                 Log::error("PlaceOrder STATUS bulk update: {$e->getMessage()}", ['ids' => $group['ids']]);
@@ -561,11 +602,29 @@ class PlaceOrder extends Command
 
         DB::beginTransaction();
         try {
+            $refundAmount = (float) $order->charge_amount;
+
             $order->update([
                 'status'        => Order::STATUS_FAILED,
-                'note' => $errorMessage,
+                'note'          => $errorMessage,
                 'retry_count'   => $retryCount,
+                'refund_amount' => $refundAmount,
             ]);
+
+            // Hoàn tiền cho user
+            if ($refundAmount > 0) {
+                $user = User::lockForUpdate()->find($order->user_id);
+                if ($user) {
+                    Dongtien::createTransaction(
+                        $user,
+                        $refundAmount,
+                        Dongtien::TYPE_REFUND,
+                        "Hoàn tiền đơn hàng #{$order->id} thất bại",
+                        ['order_id' => $order->id]
+                    );
+                    $this->info("Order #{$order->id}: Đã hoàn tiền {$refundAmount} cho user #{$user->id}");
+                }
+            }
 
             DB::commit();
         } catch (\Exception $e) {
@@ -706,10 +765,28 @@ class PlaceOrder extends Command
 
         DB::beginTransaction();
         try {
+            $refundAmount = (float) $order->charge_amount;
+
             $order->update([
                 'status'        => Order::STATUS_FAILED,
-                'note' => $errorMessage,
+                'note'          => $errorMessage,
+                'refund_amount' => $refundAmount,
             ]);
+
+            // Hoàn tiền cho user
+            if ($refundAmount > 0) {
+                $user = User::lockForUpdate()->find($order->user_id);
+                if ($user) {
+                    Dongtien::createTransaction(
+                        $user,
+                        $refundAmount,
+                        Dongtien::TYPE_REFUND,
+                        "Hoàn tiền đơn hàng #{$order->id} thất bại",
+                        ['order_id' => $order->id]
+                    );
+                    $this->info("    Order #{$order->id}: Đã hoàn tiền {$refundAmount} cho user #{$user->id}");
+                }
+            }
 
             DB::commit();
         } catch (\Exception $e) {
