@@ -3,8 +3,10 @@
 namespace App\Services\Providers;
 
 use App\Models\Service;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
-class SmmKingProvider extends BaseProvider
+class SmmProvider extends BaseProvider
 {
     public function buildApiUrl(): string
     {
@@ -13,37 +15,30 @@ class SmmKingProvider extends BaseProvider
 
     public function buildAddOrderBody(Service $service, array $validated): array
     {
-        return [
+        $body = [
             'key'      => $this->provider->api_key,
             'action'   => 'add',
             'service'  => $service->providerService->provider_service_code,
             'link'     => $validated['link'],
             'quantity' => $validated['quantity'],
         ];
+
+        if (!empty($validated['comments'])) {
+            $body['comments'] = str_replace('\n', "\n", $validated['comments']);
+        }
+
+        return $body;
     }
 
-    /**
-     * Add order response: {"order": 12563}
-     */
     public function getOrderIdFromResponse(array $response): ?string
     {
         $data = $response['data'] ?? [];
-        return isset($data['order']) ? (string) $data['order'] : null;
+        return $data['order'] ?? $data['id'] ?? null;
     }
 
     public function isSuccessResponse(array $response): bool
     {
-        if (!($response['success'] ?? false)) {
-            return false;
-        }
-
-        $data = $response['data'] ?? [];
-
-        if (isset($data['error'])) {
-            return false;
-        }
-
-        return isset($data['order']);
+        return ($response['success'] ?? false) && !isset($response['data']['error']);
     }
 
     protected function buildStatusBody(string|array $orderIds): array
@@ -51,8 +46,47 @@ class SmmKingProvider extends BaseProvider
         return [
             'key'    => $this->provider->api_key,
             'action' => 'status',
-            'order'  => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
+            'orders' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
         ];
+    }
+
+    public function canceledOrder(string|array $orderIds): array
+    {
+        $url = $this->buildCancelUrl();
+        $body = $this->buildCancelBody($orderIds);
+
+        try {
+            Log::info('Smm Cancel Order Request', [
+                'provider' => $this->provider->code,
+                'url'      => $url,
+                'body'     => $body,
+            ]);
+
+            $response = Http::timeout(30)
+                ->withHeaders(['Content-Type' => 'application/json'])
+                ->post($url, $body);
+
+            $result = [
+                'success'     => $response->successful(),
+                'status_code' => $response->status(),
+                'body'        => $response->body(),
+                'data'        => $response->json() ?? [],
+            ];
+
+            return $this->parseCancelResponse($result);
+        } catch (\Exception $e) {
+            Log::error('Smm Cancel Order Error', [
+                'provider' => $this->provider->code,
+                'error'    => $e->getMessage(),
+            ]);
+
+            return [
+                'success'     => false,
+                'status_code' => 0,
+                'body'        => $e->getMessage(),
+                'data'        => [],
+            ];
+        }
     }
 
     protected function buildCancelBody(string|array $orderIds): array
@@ -60,32 +94,20 @@ class SmmKingProvider extends BaseProvider
         return [
             'key'    => $this->provider->api_key,
             'action' => 'cancel',
-            'order'  => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
+            'orders' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
         ];
     }
 
-    /**
-     * Status response (single):
-     * {"charge": "0.5689", "start_count": "1525", "status": "Partial", "remains": "569", "currency": "USD"}
-     *
-     * Status response (batch):
-     * {"12563": {"charge": "0.5689", "start_count": "1525", "status": "Partial", "remains": "569", "currency": "USD"}, ...}
-     */
     public function parseStatusResponse(array $response): array
     {
         $data = $response['data'] ?? [];
         $result = [];
 
-        if (empty($data)) {
+        if (isset($data['error']) || (isset($data['success']) && $data['success'] === false)) {
             return $result;
         }
 
-        // Lỗi: {"error": "..."}
-        if (isset($data['error'])) {
-            return $result;
-        }
-
-        // Single order (flat): có key "status" trực tiếp là string
+        // Single order (flat)
         if (isset($data['status']) && !is_array($data['status'])) {
             $orderId = $response['request_order_id'] ?? null;
 
@@ -100,10 +122,10 @@ class SmmKingProvider extends BaseProvider
             $result[$orderId] = [
                 'provider_order_id' => $orderId,
                 'status'            => $data['status'],
-                'start_count'       => (int) ($data['start_count'] ?? 0),
-                'remains'           => (int) ($data['remains'] ?? 0),
-                'charge'            => (float) ($data['charge'] ?? 0),
-                'currency'          => $data['currency'] ?? 'USD',
+                'start_count'       => $data['start_count'] ?? 0,
+                'remains'           => $data['remains'] ?? 0,
+                'charge'            => $data['charge'] ?? 0,
+                'currency'          => $data['currency'] ?? 'VND',
             ];
 
             return $result;
@@ -111,31 +133,30 @@ class SmmKingProvider extends BaseProvider
 
         // Batch (nested by order ID)
         foreach ($data as $orderId => $orderData) {
-            if (!is_array($orderData)) {
-                continue;
-            }
-
-            // Lỗi per-order: {"362": {"error": "Incorrect order ID"}}
-            if (isset($orderData['error'])) {
+            if (is_string($orderData)) {
                 $result[(string) $orderId] = [
                     'provider_order_id' => (string) $orderId,
                     'status'            => 'failed',
-                    'error'             => $orderData['error'],
+                    'error'             => $orderData,
                     'start_count'       => 0,
                     'remains'           => 0,
                     'charge'            => 0,
-                    'currency'          => 'USD',
+                    'currency'          => 'VND',
                 ];
+                continue;
+            }
+
+            if (!is_array($orderData)) {
                 continue;
             }
 
             $result[(string) $orderId] = [
                 'provider_order_id' => (string) $orderId,
                 'status'            => $orderData['status'] ?? null,
-                'start_count'       => (int) ($orderData['start_count'] ?? 0),
-                'remains'           => (int) ($orderData['remains'] ?? 0),
-                'charge'            => (float) ($orderData['charge'] ?? 0),
-                'currency'          => $orderData['currency'] ?? 'USD',
+                'start_count'       => $orderData['start_count'] ?? 0,
+                'remains'           => $orderData['remains'] ?? 0,
+                'charge'            => $orderData['charge'] ?? 0,
+                'currency'          => $orderData['currency'] ?? 'VND',
             ];
         }
 
@@ -148,7 +169,6 @@ class SmmKingProvider extends BaseProvider
             'pending'     => 'pending',
             'processing'  => 'processing',
             'in progress' => 'in_progress',
-            'active'      => 'in_progress',
             'completed'   => 'completed',
             'canceled'    => 'canceled',
             'partial'     => 'partial',

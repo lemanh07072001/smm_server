@@ -4,7 +4,7 @@ namespace App\Services\Providers;
 
 use App\Models\Service;
 
-class SmmKingProvider extends BaseProvider
+class OneKViewProvider extends BaseProvider
 {
     public function buildApiUrl(): string
     {
@@ -80,12 +80,11 @@ class SmmKingProvider extends BaseProvider
             return $result;
         }
 
-        // Lỗi: {"error": "..."}
         if (isset($data['error'])) {
             return $result;
         }
 
-        // Single order (flat): có key "status" trực tiếp là string
+        // Single order (flat)
         if (isset($data['status']) && !is_array($data['status'])) {
             $orderId = $response['request_order_id'] ?? null;
 
@@ -115,7 +114,6 @@ class SmmKingProvider extends BaseProvider
                 continue;
             }
 
-            // Lỗi per-order: {"362": {"error": "Incorrect order ID"}}
             if (isset($orderData['error'])) {
                 $result[(string) $orderId] = [
                     'provider_order_id' => (string) $orderId,
