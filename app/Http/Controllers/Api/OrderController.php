@@ -557,27 +557,9 @@ class OrderController extends Controller
      */
     private function updateOrderAndRefund(Order $order, OrderActivityLogger $logger): void
     {
-        $refundAmount = (float) $order->charge_amount - (float) $order->refund_amount;
-
         $order->update([
-            'status' => Order::STATUS_CANCELED,
-            'refund_amount' => $order->charge_amount,
-            'final_charge' => (float) $order->charge_amount - $refundAmount,
-            'final_cost' => 0,
-            'final_profit' => 0,
-            'is_finalized' => true,
+            'status' => Order::STATUS_PROCESSING,
         ]);
-
-        // Hoàn tiền cho user nếu đã bị trừ
-        if ($refundAmount > 0) {
-            Dongtien::createTransaction(
-                $order->user,
-                $refundAmount,
-                Dongtien::TYPE_REFUND,
-                "Hoàn tiền hủy đơn #{$order->id}",
-                ['order_id' => $order->id]
-            );
-        }
 
         $logger->orderCanceled();
     }

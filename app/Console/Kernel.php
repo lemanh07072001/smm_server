@@ -42,6 +42,13 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/place-order-status.log'));
 
+        // Kiểm tra số dư nhà cung cấp mỗi 5 phút
+        $schedule->command('provider:check-balance')
+            ->runInBackground()
+            ->everyFiveMinutes()
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/provider-balance.log'));
+
         // Thống kê đơn hàng mỗi 10 phút
         $schedule->command('report:order')
             ->runInBackground()

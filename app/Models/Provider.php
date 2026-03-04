@@ -16,6 +16,7 @@ class Provider extends Model
         'api_url',
         'api_key',
         'balance',
+        'balance_currency',
         'balance_updated_at',
         'is_active',
         'notes',
