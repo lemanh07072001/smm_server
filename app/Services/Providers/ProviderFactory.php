@@ -13,6 +13,7 @@ class ProviderFactory
     protected static array $customProviders = [
         'smm_panel' => SmmPanelProvider::class,
         'omo'       => OmoProvider::class,
+        'smm_king'  => SmmKingProvider::class,
         // Thêm provider mới ở đây chỉ khi format API thực sự khác:
         // 'another_provider' => AnotherProvider::class,
     ];
