@@ -11,7 +11,7 @@ class ProviderFactory
         'trao_doi_tuong_tac' => TraoDoiTuongTacProvider::class,
         'smm_panel'          => SmmPanelProvider::class,
         'omo'                => OmoProvider::class,
-        'smmking'           => SmmKingProvider::class,
+        'smmking'            => SmmKingProvider::class,
         'smm'                => SmmProvider::class,
         '1kview'             => OneKViewProvider::class,
         // Thêm provider mới ở đây:

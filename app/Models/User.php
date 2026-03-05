@@ -17,7 +17,8 @@ class User extends Authenticatable
     public const ROLE_ADMIN = 0;
     public const ROLE_USER = 1;
     public const ROLE_RESELLER = 2;
-    public const ROLES = [self::ROLE_ADMIN, self::ROLE_USER, self::ROLE_RESELLER];
+    public const ROLE_SUPER_ADMIN = 3;
+    public const ROLES = [self::ROLE_ADMIN, self::ROLE_USER, self::ROLE_RESELLER, self::ROLE_SUPER_ADMIN];
 
     /**
      * The attributes that are mass assignable.
@@ -85,6 +86,11 @@ class User extends Authenticatable
     public function isReseller(): bool
     {
         return $this->role === self::ROLE_RESELLER;
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === self::ROLE_SUPER_ADMIN;
     }
 
     /**

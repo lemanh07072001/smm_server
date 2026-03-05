@@ -66,5 +66,6 @@ class Kernel extends HttpKernel
         'throttle' => \Illuminate\Routing\Middleware\ThrottleRequests::class,
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'sepay.webhook' => \App\Http\Middleware\VerifySepayWebhook::class,
+        'super_admin'   => \App\Http\Middleware\SuperAdmin::class,
     ];
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AffiliateController;
+use App\Http\Controllers\Api\PartnerProviderController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BankAutoController;
 use App\Http\Controllers\Api\CategoryController;
@@ -91,6 +92,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/category-groups/{id}', [CategoryGroupController::class, 'update']);
     Route::delete('/category-groups/{id}', [CategoryGroupController::class, 'destroy']);
 
+    // Partner Providers (allowed - dành cho admin xem khi thêm provider)
+    Route::get('/partner-providers/allowed', [PartnerProviderController::class, 'allowed']);
+
     // Providers
     Route::get('/providers', [ProviderController::class, 'index']);
     Route::post('/providers', [ProviderController::class, 'store']);
@@ -98,7 +102,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/providers/{id}', [ProviderController::class, 'show']);
     Route::post('/providers/{id}', [ProviderController::class, 'update']);
     Route::delete('/providers/{id}', [ProviderController::class, 'destroy']);
-
 
     // Provider Services
     Route::get('/provider-services', [ProviderServiceController::class, 'index']);
@@ -205,4 +208,13 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::middleware(['auth:sanctum', 'super_admin'])->prefix('super-admin')->group(function () {
     Route::get('/providers', [ProviderController::class, 'listSupport']);
     Route::post('/providers/{id}/toggle-supported', [ProviderController::class, 'toggleSupported']);
+
+    // Partner Providers
+    Route::get('/partner-providers/all', [PartnerProviderController::class, 'all']);
+    Route::get('/partner-providers', [PartnerProviderController::class, 'index']);
+    Route::post('/partner-providers', [PartnerProviderController::class, 'store']);
+    Route::get('/partner-providers/{id}', [PartnerProviderController::class, 'show']);
+    Route::put('/partner-providers/{id}', [PartnerProviderController::class, 'update']);
+    Route::delete('/partner-providers/{id}', [PartnerProviderController::class, 'destroy']);
+    Route::post('/partner-providers/{id}/toggle', [PartnerProviderController::class, 'toggle']);
 });

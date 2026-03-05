@@ -15,12 +15,13 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie', 'broadcasting/auth'],
+    'paths' => ['api/*', 'super-admin/*', 'sanctum/csrf-cookie', 'broadcasting/auth'],
 
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
-        'http://localhost:3000', 
+        'http://localhost:3000',
+        'http://127.0.0.1:8000', 
         'https://tangfollowvn.com', 
         'https://api.tangfollowvn.com',
         'https://k-cosmicsocial.com',

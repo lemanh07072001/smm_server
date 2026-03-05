@@ -103,6 +103,10 @@ class PlaceOrder extends Command
                             $this->info("Order #{$order->id}: OK -> Provider Order: {$result['provider_order_id']}");
                             Log::info("PlaceOrder ADD: #{$order->id} -> ID: {$result['provider_order_id']}");
                             RedisHelper::del($lockKey);
+                        } elseif (!empty($result['skip_retry'])) {
+                            // Provider bị tắt tạm → giữ pending, release lock để scan có thể retry sau
+                            $this->warn("Order #{$order->id}: Provider bị tắt → giữ pending, release lock.");
+                            RedisHelper::del($lockKey);
                         } else {
                             $currentRetry = $order->retry_count ?? 0;
                             $newRetry = $currentRetry + 1;
@@ -506,6 +510,10 @@ class PlaceOrder extends Command
                 return ['success' => false, 'error' => "Provider không được hỗ trợ: {$provider->code}"];
             }
 
+            if (!$provider->is_active) {
+                return ['success' => false, 'error' => "Provider [{$provider->code}] đang bị tắt bởi Super Admin.", 'skip_retry' => true];
+            }
+
             $providerService = ProviderFactory::make($provider);
 
             $validated = [
@@ -672,6 +680,12 @@ class PlaceOrder extends Command
         if (!ProviderFactory::isSupported($provider->code)) {
             $logger->orderFailed("Provider không được hỗ trợ: {$provider->code}");
             $this->updateOrderFailed($order, "Provider không được hỗ trợ: {$provider->code}");
+            return;
+        }
+
+        if (!$provider->is_active) {
+            $logger->error("Provider [{$provider->code}] đang bị tắt bởi Super Admin. Giữ nguyên pending để retry sau.");
+            $this->warn("    Order #{$order->id}: Provider [{$provider->code}] bị tắt → giữ pending.");
             return;
         }
 
