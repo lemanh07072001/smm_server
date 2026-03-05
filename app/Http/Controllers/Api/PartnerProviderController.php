@@ -127,14 +127,12 @@ class PartnerProviderController extends Controller
     {
         $affected = Provider::where('code', $code)->update(['is_active' => $isAllowed ? 1 : 0]);
 
-        if ($affected > 0) {
-            // Clear services cache để thay đổi có hiệu lực ngay
-            $cacheKeys = Cache::get('services_cache_keys', []);
-            foreach ($cacheKeys as $key) {
-                Cache::forget($key);
-            }
-            Cache::forget('services_cache_keys');
+        // Clear services cache luôn để thay đổi có hiệu lực ngay
+        $cacheKeys = Cache::get('services_cache_keys', []);
+        foreach ($cacheKeys as $key) {
+            Cache::forget($key);
         }
+        Cache::forget('services_cache_keys');
 
         return $affected;
     }
