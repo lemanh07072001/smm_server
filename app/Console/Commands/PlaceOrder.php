@@ -312,7 +312,7 @@ class PlaceOrder extends Command
                         }
                         $this->warn("Provider {$provider->code}: Lỗi sau retry - {$body}. Bỏ qua " . count($providerOrderIds) . " orders.");
 
-                        // Nếu lỗi do số dư tài khoản provider không đủ → mark partial + log DB
+                        // Nếu lỗi do số dư tài khoản provider không đủ → mark completed + ghi error_message + log DB
                         if ($errorMsg && (
                             str_contains($errorMsg, 'Số dư') ||
                             str_contains(strtolower($errorMsg), 'balance') ||
@@ -323,11 +323,14 @@ class PlaceOrder extends Command
                                 if (!$order) {
                                     continue;
                                 }
-                                Order::where('id', $order->id)->update(['status' => Order::STATUS_PARTIAL]);
+                                Order::where('id', $order->id)->update([
+                                    'status'        => Order::STATUS_COMPLETED,
+                                    'error_message' => "Provider hết số dư, không thể kiểm tra trạng thái: {$errorMsg}",
+                                ]);
                                 OrderActivityLogger::for($order->id)
                                     ->provider($provider->code, $providerOrderId)
                                     ->error("Provider hết số dư, không thể kiểm tra trạng thái: {$errorMsg}");
-                                $this->warn("  → Order #{$order->id} (provider: {$providerOrderId}): đổi sang partial do provider hết số dư.");
+                                $this->warn("  → Order #{$order->id} (provider: {$providerOrderId}): đổi sang completed do provider hết số dư.");
                             }
                         }
 
