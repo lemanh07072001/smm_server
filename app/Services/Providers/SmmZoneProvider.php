@@ -59,18 +59,83 @@ class SmmZoneProvider extends BaseProvider
     protected function buildStatusBody(string|array $orderIds): array
     {
         return [
-            'key' => $this->provider->api_key,
+            'key'    => $this->provider->api_key,
             'action' => 'status',
-            'order' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
+            'orders' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
         ];
     }
 
     protected function buildCancelBody(string|array $orderIds): array
     {
         return [
-            'key' => $this->provider->api_key,
+            'key'    => $this->provider->api_key,
             'action' => 'cancel',
-            'order' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
+            'orders' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
         ];
+    }
+
+    public function parseStatusResponse(array $response): array
+    {
+        $data = $response['data'] ?? [];
+        $result = [];
+
+        if (isset($data['error']) || (isset($data['success']) && $data['success'] === false)) {
+            return $result;
+        }
+
+        // Single order (flat response)
+        if (isset($data['status']) && !is_array($data['status'])) {
+            $orderId = $response['request_order_id'] ?? null;
+
+            if ($orderId === null && isset($response['request_order_ids']) && count($response['request_order_ids']) === 1) {
+                $orderId = (string) $response['request_order_ids'][0];
+            }
+
+            if ($orderId === null) {
+                return $result;
+            }
+
+            $result[$orderId] = [
+                'provider_order_id' => $orderId,
+                'status'            => $data['status'],
+                'start_count'       => $data['start_count'] ?? 0,
+                'remains'           => $data['remains'] ?? 0,
+                'charge'            => $data['charge'] ?? 0,
+                'currency'          => $data['currency'] ?? 'VND',
+            ];
+
+            return $result;
+        }
+
+        // Batch (nested by order ID)
+        foreach ($data as $orderId => $orderData) {
+            if (is_string($orderData)) {
+                $result[(string) $orderId] = [
+                    'provider_order_id' => (string) $orderId,
+                    'status'            => 'failed',
+                    'error'             => $orderData,
+                    'start_count'       => 0,
+                    'remains'           => 0,
+                    'charge'            => 0,
+                    'currency'          => 'VND',
+                ];
+                continue;
+            }
+
+            if (!is_array($orderData)) {
+                continue;
+            }
+
+            $result[(string) $orderId] = [
+                'provider_order_id' => (string) $orderId,
+                'status'            => $orderData['status'] ?? null,
+                'start_count'       => $orderData['start_count'] ?? 0,
+                'remains'           => $orderData['remains'] ?? 0,
+                'charge'            => $orderData['charge'] ?? 0,
+                'currency'          => $orderData['currency'] ?? 'VND',
+            ];
+        }
+
+        return $result;
     }
 }
