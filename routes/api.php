@@ -197,6 +197,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/affiliate/withdrawals', [AffiliateController::class, 'adminWithdrawals']);
     Route::post('/admin/affiliate/withdrawals/{id}/approve', [AffiliateController::class, 'approve']);
     Route::post('/admin/affiliate/withdrawals/{id}/reject', [AffiliateController::class, 'reject']);
+    Route::post('/admin/affiliate/users/{id}/commission-rate', [AffiliateController::class, 'setCommissionRate']);
 
     // Admin Bank Auto
     Route::post('/admin/bank-auto/{id}/approve', [BankAutoController::class, 'approve']);

@@ -36,6 +36,7 @@ class User extends Authenticatable
         'is_active',
         'referred_by',
         'affiliate_balance',
+        'affiliate_commission_rate',
     ];
 
     /**
@@ -62,6 +63,7 @@ class User extends Authenticatable
         'is_active' => 'boolean',
         'referred_by' => 'integer',
         'affiliate_balance' => 'decimal:6',
+        'affiliate_commission_rate' => 'decimal:2',
     ];
 
     /**
