@@ -296,6 +296,7 @@ class OrderController extends Controller
             // Tạo order trong database với status pending
             $order = Order::create([
                 'user_id' => $user->id,
+                'order_source' => 'web',
                 'service_id' => $validated['service_id'],
                 'provider_service_id' => $validated['provider_service_id'],
                 'link' => $validated['link'],

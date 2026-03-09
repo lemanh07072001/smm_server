@@ -137,6 +137,7 @@ class ApiOrderController extends Controller
 
             $order = Order::create([
                 'user_id'            => $user->id,
+                'order_source'       => 'api',
                 'service_id'         => $service->id,
                 'provider_service_id'=> $service->provider_service_id,
                 'link'               => $link,

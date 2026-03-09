@@ -49,6 +49,7 @@ class Order extends Model
      */
     protected $fillable = [
         'user_id',
+        'order_source',
         'service_id',
         'provider_service_id',
         'provider_order_id',
