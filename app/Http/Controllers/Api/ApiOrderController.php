@@ -227,7 +227,7 @@ class ApiOrderController extends Controller
             'start_count' => (string) ($order->start_count ?? 0),
             'status'      => $this->mapStatusToApiText($order->status),
             'remains'     => (string) ($order->remains ?? 0),
-            'currency'    => 'USD',
+            'currency'    => 'VND',
         ];
     }
 
@@ -391,7 +391,7 @@ class ApiOrderController extends Controller
 
         return response()->json([
             'balance'  => number_format((float) $user->balance, 5, '.', ''),
-            'currency' => 'USD',
+            'currency' => 'VND',
         ]);
     }
 }
