@@ -124,7 +124,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Countries
     Route::get('/countries', [CountryController::class, 'index']);
-    Route::get('/countries/all', [CountryController::class, 'all']);
 
     // Users
     Route::get('/users', [UserController::class, 'index']);
