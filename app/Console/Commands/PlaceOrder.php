@@ -87,6 +87,7 @@ class PlaceOrder extends Command
                         $order = Order::with(['user', 'service.providerService.provider'])
                             ->where('id', $orderId)
                             ->where('status', Order::STATUS_PENDING)
+                            ->whereNull('provider_order_id')
                             ->first();
 
                         if (!$order) {
@@ -151,6 +152,7 @@ class PlaceOrder extends Command
         $this->info("Process ID: {$processId}");
 
         $orders = Order::where('status', Order::STATUS_PENDING)
+            ->whereNull('provider_order_id')
             ->where('retry_count', '<', Order::RETRY_COUNT)
             ->orderBy('id', 'asc')
             ->cursor();
@@ -161,7 +163,7 @@ class PlaceOrder extends Command
         foreach ($orders as $order) {
             $lockKey = "place_order_lock:order:{$order->id}";
 
-            $lockAcquired = RedisHelper::acquireLock($lockKey, $processId, 300);
+            $lockAcquired = RedisHelper::acquireLock($lockKey, $processId, 3600);
 
             if (!$lockAcquired) {
                 $skippedCount++;
