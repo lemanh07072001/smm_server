@@ -187,6 +187,41 @@ class UserController extends Controller
     }
 
     /**
+     * User tự generate lại api_token (lưu vào DB, không ảnh hưởng login)
+     */
+    public function generateMyApiKey(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        // Xóa sanctum token api cũ nếu có
+        $user->tokens()->where('name', 'api_token')->delete();
+        // Tạo Sanctum token và lưu plaintext vào cột api_token
+        $apiTokenPlain = $user->createToken('api_token')->plainTextToken;
+        $user->update(['api_token' => $apiTokenPlain]);
+
+        return response()->json([
+            'message' => 'Tạo API token thành công.',
+            'data' => [
+                'api_token' => $apiTokenPlain,
+            ],
+        ]);
+    }
+
+    /**
+     * Xem api_token hiện tại
+     */
+    public function getMyApiKey(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        return response()->json([
+            'data' => [
+                'api_token' => $user->api_token,
+            ],
+        ]);
+    }
+
+    /**
      * Cộng hoặc trừ tiền cho user
      * amount: luôn dương
      * type: deposit/refund = cộng tiền, charge = trừ tiền, adjustment = dùng is_credit

@@ -67,5 +67,6 @@ class Kernel extends HttpKernel
         'verified' => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'sepay.webhook' => \App\Http\Middleware\VerifySepayWebhook::class,
         'super_admin'   => \App\Http\Middleware\SuperAdmin::class,
+        'api_key'       => \App\Http\Middleware\ApiKeyAuth::class,
     ];
 }

@@ -33,6 +33,7 @@ class User extends Authenticatable
         'balance',
         'discount',
         'api_key',
+        'api_token',
         'is_active',
         'referred_by',
         'affiliate_balance',

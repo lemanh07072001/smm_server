@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AffiliateController;
+use App\Http\Controllers\Api\ApiOrderController;
 use App\Http\Controllers\Api\PartnerProviderController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BankAutoController;
@@ -134,6 +135,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/users/{id}', [UserController::class, 'destroy']);
     Route::post('/users/{id}/reset-password', [UserController::class, 'resetPassword']);
     Route::post('/users/{id}/generate-api-key', [UserController::class, 'generateApiKey']);
+    Route::post('/user/generate-api-key', [UserController::class, 'generateMyApiKey']);
+    Route::get('/user/api-key', [UserController::class, 'getMyApiKey']);
     Route::post('/users/{id}/adjust-balance', [UserController::class, 'adjustBalance']);
 
     // Orders
@@ -203,6 +206,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/bank-auto/{id}/approve', [BankAutoController::class, 'approve']);
     Route::post('/admin/bank-auto/{id}/reject', [BankAutoController::class, 'reject']);
 
+});
+
+// Public API (xác thực qua api_token lưu trong DB)
+Route::middleware('api_key')->group(function () {
+    Route::post('/v2', [ApiOrderController::class, 'handle']);
+    Route::get('/v2', [ApiOrderController::class, 'handle']);
 });
 
 // Super Admin routes (dev only)
