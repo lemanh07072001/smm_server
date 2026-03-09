@@ -22,7 +22,7 @@ class PlaceOrder extends Command
      * @var string
      */
     protected $signature = 'order_place
-                            {action=add : Action to perform (add-priority|add|scan|status)}';
+                            {action=add : Action to perform (add-priority|add|scan|status|refund-check)}';
 
     /**
      * The console command description.
@@ -42,7 +42,8 @@ class PlaceOrder extends Command
             'add-priority' => $this->handleAddPriority(),
             'scan'         => $this->handleScan(),
             'status'       => $this->handleStatus(),
-            default        => $this->error("Action không hợp lệ. Chỉ hỗ trợ: add-priority, add, scan, status"),
+            'refund-check' => $this->handleRefundCheck(),
+            default        => $this->error("Action không hợp lệ. Chỉ hỗ trợ: add-priority, add, scan, status, refund-check"),
         };
     }
 
@@ -655,6 +656,48 @@ class PlaceOrder extends Command
         }
 
         $order->update($updateData);
+    }
+
+    /**
+     * Check status các đơn đang chờ hoàn (processing) từ provider
+     * Chạy bằng: php artisan order_place refund-check
+     */
+    protected function handleRefundCheck()
+    {
+        $this->info('Bắt đầu kiểm tra trạng thái orders đang chờ hoàn (processing)...');
+
+        $chunkSize = 500;
+        $processed = 0;
+
+        $totalCount = Order::where('status', Order::STATUS_PROCESSING)
+            ->whereNotNull('provider_order_id')
+            ->count();
+
+        if ($totalCount === 0) {
+            $this->info('Không có order nào đang chờ hoàn.');
+            return 0;
+        }
+
+        $this->info("Tìm thấy {$totalCount} orders cần kiểm tra.");
+
+        Order::with(['service.providerService.provider'])
+            ->where('status', Order::STATUS_PROCESSING)
+            ->whereNotNull('provider_order_id')
+            ->orderBy('id')
+            ->chunk($chunkSize, function ($orders) use (&$processed, $totalCount) {
+                $groupedOrders = $orders->groupBy(fn($o) => $o->service->providerService->provider->id ?? null);
+                $groupedOrders->forget(null);
+
+                foreach ($groupedOrders as $providerOrders) {
+                    $this->processStatusBatch($providerOrders);
+                }
+
+                $processed += $orders->count();
+                $this->info("Tiến độ: {$processed}/{$totalCount}");
+            });
+
+        $this->info('Hoàn thành!');
+        return 0;
     }
 
     /**
