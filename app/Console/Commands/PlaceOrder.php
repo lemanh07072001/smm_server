@@ -153,7 +153,10 @@ class PlaceOrder extends Command
 
         $orders = Order::where('status', Order::STATUS_PENDING)
             ->whereNull('provider_order_id')
-            ->where('retry_count', '<', Order::RETRY_COUNT)
+            ->where(function ($q) {
+                $q->whereNull('retry_count')
+                  ->orWhere('retry_count', '<', Order::RETRY_COUNT);
+            })
             ->orderBy('id', 'asc')
             ->cursor();
 
@@ -163,7 +166,7 @@ class PlaceOrder extends Command
         foreach ($orders as $order) {
             $lockKey = "place_order_lock:order:{$order->id}";
 
-            $lockAcquired = RedisHelper::acquireLock($lockKey, $processId, 3600);
+            $lockAcquired = RedisHelper::acquireLock($lockKey, $processId, 600);
 
             if (!$lockAcquired) {
                 $skippedCount++;
@@ -172,6 +175,10 @@ class PlaceOrder extends Command
 
             try {
                 $orderData = json_encode(['id' => $order->id]);
+
+                if ($orderData === false) {
+                    throw new \RuntimeException("json_encode thất bại cho order #{$order->id}");
+                }
 
                 if (isset($order->is_priority) && $order->is_priority == Order::PRIORITY[0]) {
                     RedisHelper::lpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, $orderData);
@@ -472,41 +479,66 @@ class PlaceOrder extends Command
         foreach ($grouped as $group) {
             try {
                 $newStatus = $group['data']['status'] ?? null;
-                $isFailed = $newStatus === Order::STATUS_FAILED;
+                $isFailed  = $newStatus === Order::STATUS_FAILED;
+                $isPartial = $newStatus === Order::STATUS_PARTIAL;
 
-                // Nếu chuyển sang failed, cần load orders trước để lấy charge_amount
-                $ordersToRefund = $isFailed
+                // Load orders nếu cần tính hoàn tiền
+                $ordersToProcess = ($isFailed || $isPartial)
                     ? Order::whereIn('id', $group['ids'])->get()
                     : collect();
 
-                Order::whereIn('id', $group['ids'])->update(
-                    $isFailed
-                        ? array_merge($group['data'], ['refund_amount' => DB::raw('charge_amount')])
-                        : $group['data']
-                );
+                if ($isFailed) {
+                    Order::whereIn('id', $group['ids'])->update(
+                        array_merge($group['data'], ['refund_amount' => DB::raw('charge_amount')])
+                    );
+                } else {
+                    Order::whereIn('id', $group['ids'])->update($group['data']);
+                }
 
-                // Hoàn tiền cho từng order failed
-                foreach ($ordersToRefund as $failedOrder) {
-                    $refundAmount = (float) $failedOrder->charge_amount;
+                // Xử lý hoàn tiền cho từng order
+                foreach ($ordersToProcess as $processOrder) {
+                    $remains      = (int) ($group['data']['remains'] ?? $processOrder->remains ?? 0);
+                    $quantity     = (int) $processOrder->quantity;
+                    $chargeAmount = (float) $processOrder->charge_amount;
+
+                    if ($isFailed) {
+                        // Hoàn toàn bộ
+                        $refundAmount = $chargeAmount;
+                        $note = "Hoàn tiền đơn hàng #{$processOrder->id} thất bại";
+                    } elseif ($isPartial) {
+                        // Hoàn theo tỉ lệ: remains / quantity * charge_amount
+                        if ($quantity > 0 && $remains > 0 && $chargeAmount > 0) {
+                            $refundAmount = round(($remains / $quantity) * $chargeAmount, 2);
+                        } else {
+                            $refundAmount = 0;
+                        }
+                        $note = "Hoàn tiền một phần đơn hàng #{$processOrder->id} (còn lại: {$remains}/{$quantity})";
+                    } else {
+                        $refundAmount = 0;
+                        $note = '';
+                    }
+
                     if ($refundAmount > 0) {
                         DB::beginTransaction();
                         try {
-                            $user = User::lockForUpdate()->find($failedOrder->user_id);
+                            $user = User::lockForUpdate()->find($processOrder->user_id);
                             if ($user) {
+                                Order::where('id', $processOrder->id)->update(['refund_amount' => $refundAmount]);
                                 Dongtien::createTransaction(
                                     $user,
                                     $refundAmount,
                                     Dongtien::TYPE_REFUND,
-                                    "Hoàn tiền đơn hàng #{$failedOrder->id} thất bại",
-                                    ['order_id' => $failedOrder->id]
+                                    $note,
+                                    ['order_id' => $processOrder->id]
                                 );
-                                $this->info("  Order #{$failedOrder->id}: Đã hoàn tiền {$refundAmount} cho user #{$user->id}");
+                                $this->info("  Order #{$processOrder->id}: Hoàn tiền {$refundAmount} cho user #{$user->id} ({$newStatus})");
                             }
                             DB::commit();
                         } catch (\Exception $e) {
                             DB::rollBack();
-                            Log::error('Error refunding failed order (bulk status)', [
-                                'order_id' => $failedOrder->id,
+                            Log::error('Error refunding order (bulk status)', [
+                                'order_id' => $processOrder->id,
+                                'status'   => $newStatus,
                                 'error'    => $e->getMessage(),
                             ]);
                         }
@@ -674,171 +706,5 @@ class PlaceOrder extends Command
         }
     }
 
-    /**
-     * Xử lý một đơn hàng từ queue thông thường (dùng cho handleAdd)
-     */
-    private function processOrder(array $orderData): void
-    {
-        $orderId = $orderData['id'];
-        $this->line("  -> Xử lý order #{$orderId}...");
-
-        $logger = OrderActivityLogger::for($orderId);
-        $logger->processingStarted();
-
-        $order = Order::with(['user', 'service.providerService.provider'])
-            ->where('id', $orderId)
-            ->where('status', Order::STATUS_PENDING)
-            ->first();
-
-        if (!$order) {
-            $this->warn("    Order #{$orderId} không tồn tại hoặc đã được xử lý");
-            $logger->error('Order không tồn tại hoặc đã được xử lý');
-            return;
-        }
-
-        $service = $order->service;
-        $provider = $service->providerService->provider ?? null;
-
-        if (!$provider) {
-            $logger->orderFailed('Provider không tồn tại');
-            $this->updateOrderFailed($order, 'Provider không tồn tại');
-            return;
-        }
-
-        $logger->provider($provider->code);
-
-        if (!ProviderFactory::isSupported($provider->code)) {
-            $logger->orderFailed("Provider không được hỗ trợ: {$provider->code}");
-            $this->updateOrderFailed($order, "Provider không được hỗ trợ: {$provider->code}");
-            return;
-        }
-
-        if (!$provider->is_active) {
-            $logger->error("Provider [{$provider->code}] đang bị tắt bởi Super Admin. Giữ nguyên pending để retry sau.");
-            $this->warn("    Order #{$order->id}: Provider [{$provider->code}] bị tắt → giữ pending.");
-            return;
-        }
-
-        try {
-            $providerService = ProviderFactory::make($provider);
-
-            $validated = [
-                'link'     => $order->link,
-                'quantity' => $order->quantity,
-            ];
-
-            if (!empty($order->livestream_duration)) {
-                $validated['livestream_duration'] = $order->livestream_duration;
-            }
-
-            if (!empty($order->comments)) {
-                $validated['comments'] = $order->comments;
-            }
-
-            $startTime = microtime(true);
-            $logger->providerRequest($providerService->buildApiUrl(), $providerService->buildAddOrderBody($service, $validated));
-
-            $response = $providerService->sendRequest($service, $validated);
-
-            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
-            $logger->providerResponse($response, $durationMs);
-
-            if (!$providerService->isSuccessResponse($response)) {
-                $data = $response['data'] ?? [];
-                $errorMsg = $data['error'] ?? $response['body'] ?? 'Unknown error';
-                $logger->orderFailed($errorMsg);
-                $this->updateOrderFailed($order, $errorMsg);
-                return;
-            }
-
-            $providerOrderId = $providerService->getOrderIdFromResponse($response);
-
-            if ($providerOrderId === null) {
-                $logger->orderFailed('Provider không trả về order ID');
-                $this->updateOrderFailed($order, 'Provider không trả về order ID');
-                return;
-            }
-
-            $logger->provider($provider->code, $providerOrderId);
-
-            $logger->statusCheck();
-            $statusResponse = $providerService->getOrderStatus($providerOrderId);
-
-            $updateData = [
-                'provider_order_id' => $providerOrderId,
-                'status'            => Order::STATUS_IN_PROGRESS,
-            ];
-
-            $responseData = $statusResponse['data'] ?? [];
-            $statusData = $responseData[$providerOrderId] ?? (isset($responseData['status']) ? $responseData : null);
-
-            if ($statusData) {
-                $logger->statusResponse($statusData);
-                $updateData['start_count'] = $statusData['start_count'] ?? null;
-                $updateData['remains']     = $statusData['remains'] ?? null;
-
-                if (!empty($statusData['status'])) {
-                    $updateData['status'] = Order::mapProviderStatus($statusData['status']);
-                }
-            }
-
-            $order->update($updateData);
-            $logger->orderUpdated($updateData);
-            $logger->orderPlacedSuccess($providerOrderId, $updateData['status']);
-            $logger->processingCompleted();
-
-            $this->info("    Order #{$orderId} -> Provider Order: {$providerOrderId} | Status: {$updateData['status']}");
-        } catch (\Exception $e) {
-            $logger->error($e->getMessage(), $e);
-            $this->updateOrderFailed($order, $e->getMessage());
-        }
-    }
-
-    /**
-     * Cập nhật order thất bại và gửi thông báo (dùng cho handleAdd)
-     */
-    private function updateOrderFailed(Order $order, string $errorMessage): void
-    {
-        $this->error("    Order #{$order->id}: {$errorMessage}");
-
-        $telegramMessage = "Order #{$order->id} thất bại\n"
-            . "User: #{$order->user_id}\n"
-            . "Link: {$order->link}\n"
-            . "Lỗi: {$errorMessage}";
-        TelegramHelper::sendNotifyErrorSystem($telegramMessage, 'Order Failed');
-
-        DB::beginTransaction();
-        try {
-            $refundAmount = (float) $order->charge_amount;
-
-            $order->update([
-                'status'        => Order::STATUS_FAILED,
-                'note'          => $errorMessage,
-                'refund_amount' => $refundAmount,
-            ]);
-
-            // Hoàn tiền cho user
-            if ($refundAmount > 0) {
-                $user = User::lockForUpdate()->find($order->user_id);
-                if ($user) {
-                    Dongtien::createTransaction(
-                        $user,
-                        $refundAmount,
-                        Dongtien::TYPE_REFUND,
-                        "Hoàn tiền đơn hàng #{$order->id} thất bại",
-                        ['order_id' => $order->id]
-                    );
-                    $this->info("    Order #{$order->id}: Đã hoàn tiền {$refundAmount} cho user #{$user->id}");
-                }
-            }
-
-            DB::commit();
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('Error refunding order', [
-                'order_id' => $order->id,
-                'error'    => $e->getMessage(),
-            ]);
-        }
-    }
 }
+
