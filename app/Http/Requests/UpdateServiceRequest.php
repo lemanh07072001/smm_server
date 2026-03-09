@@ -22,6 +22,10 @@ class UpdateServiceRequest extends FormRequest
             $merge['is_active'] = filter_var($this->is_active, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $this->is_active;
         }
 
+        if ($this->has('api_accessible')) {
+            $merge['api_accessible'] = filter_var($this->api_accessible, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $this->api_accessible;
+        }
+
         if ($this->has('group_id') && $this->input('group_id') !== 'fb_reaction') {
             $merge['reaction_types'] = null;
         }
@@ -52,6 +56,7 @@ class UpdateServiceRequest extends FormRequest
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'priority' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
+            'api_accessible' => ['nullable', 'boolean'],
             'service_status' => ['nullable', 'integer', 'in:0,1,2,3,4'],
             'allow_multiple_reactions' => ['nullable', 'boolean'],
             'reaction_types' => ['nullable', 'array'],
