@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('orders', function (Blueprint $table) {
-            $table->timestamp('canceled_at')->nullable()->after('completed_at');
+            $table->timestamp('canceled_at')->nullable();
             $table->unsignedBigInteger('canceled_by')->nullable()->after('canceled_at')->comment('user_id của người hủy');
         });
     }
