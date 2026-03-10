@@ -54,6 +54,7 @@ Route::get('/category-groups/get-all', [CategoryGroupController::class, 'getAll'
 Route::get('/services/all', [ServiceController::class, 'all']);
 Route::get('/services/form-types', [ServiceController::class, 'formTypes']);
 Route::get('/services/platforms', [ServiceController::class, 'platforms']);
+Route::get('/services/group/{groupId?}', [ServiceController::class, 'getByGroupId']);
 
 Route::post('/get-providers', [ProviderController::class, 'getProvider']);
 Route::get('/countries/all', [CountryController::class, 'all']);
@@ -115,7 +116,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/services', [ServiceController::class, 'index']);
     Route::post('/services', [ServiceController::class, 'store']);
     Route::post('/services/delete-multiple', [ServiceController::class, 'destroyMultiple']);
-    Route::get('/services/group/{groupId?}', [ServiceController::class, 'getByGroupId']);
+
     Route::get('/services/{id}', [ServiceController::class, 'show']);
     Route::post('/services/{id}', [ServiceController::class, 'update']);
     Route::delete('/services/{id}', [ServiceController::class, 'destroy']);
