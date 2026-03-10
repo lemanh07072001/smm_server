@@ -76,6 +76,8 @@ class Order extends Model
         'livestream_duration',
         'retry_count',
         'is_priority',
+        'canceled_at',
+        'canceled_by',
     ];
 
     /**
@@ -101,6 +103,7 @@ class Order extends Model
         'final_profit' => 'decimal:2',
         'is_finalized' => 'boolean',
         'completed_at' => 'datetime',
+        'canceled_at' => 'datetime',
         'lost_count' => 'integer',
         'livestream_duration' => 'integer',
         'retry_count' => 'integer',

@@ -670,7 +670,6 @@ class PlaceOrder extends Command
         $processed = 0;
 
         $totalCount = Order::where('status', Order::STATUS_PROCESSING)
-            ->whereNotNull('provider_order_id')
             ->count();
 
         if ($totalCount === 0) {

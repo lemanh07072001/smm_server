@@ -474,7 +474,7 @@ class OrderController extends Controller
             $this->cancelOrderAtProvider($order, $logger);
 
             // Cập nhật order và hoàn tiền
-            $this->updateOrderAndRefund($order, $logger);
+            $this->updateOrderAndRefund($order, $logger, $user->id);
 
             DB::commit();
 
@@ -556,11 +556,40 @@ class OrderController extends Controller
     /**
      * Cập nhật order status và hoàn tiền cho user
      */
-    private function updateOrderAndRefund(Order $order, OrderActivityLogger $logger): void
+    private function updateOrderAndRefund(Order $order, OrderActivityLogger $logger, int $canceledBy): void
     {
-        $order->update([
-            'status' => Order::STATUS_PROCESSING,
-        ]);
+        $canceledData = [
+            'canceled_at' => now(),
+            'canceled_by' => $canceledBy,
+        ];
+
+        // Chưa gửi lên provider → hoàn tiền ngay, set CANCELED luôn
+        if (!$order->provider_order_id) {
+            $refundAmount = (float) $order->charge_amount;
+
+            $order->update(array_merge($canceledData, [
+                'status'        => Order::STATUS_CANCELED,
+                'refund_amount' => $refundAmount,
+            ]));
+
+            if ($refundAmount > 0) {
+                $user = \App\Models\User::lockForUpdate()->find($order->user_id);
+                if ($user) {
+                    Dongtien::createTransaction(
+                        $user,
+                        $refundAmount,
+                        Dongtien::TYPE_REFUND,
+                        "Hoàn tiền đơn hàng #{$order->id} đã hủy",
+                        ['order_id' => $order->id]
+                    );
+                }
+            }
+        } else {
+            // Đã gửi lên provider → chờ provider xử lý hoàn (STATUS_PROCESSING)
+            $order->update(array_merge($canceledData, [
+                'status' => Order::STATUS_PROCESSING,
+            ]));
+        }
 
         $logger->orderCanceled();
     }
