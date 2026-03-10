@@ -22,6 +22,10 @@ class StoreServiceRequest extends FormRequest
             $merge['is_active'] = filter_var($this->is_active, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $this->is_active;
         }
 
+        if ($this->has('api_accessible')) {
+            $merge['api_accessible'] = filter_var($this->api_accessible, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? $this->api_accessible;
+        }
+
         if ($this->input('group_id') !== 'fb_reaction') {
             $merge['reaction_types'] = null;
         }
@@ -45,11 +49,14 @@ class StoreServiceRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'sell_rate' => ['required', 'numeric', 'min:0'],
+            'agent_price' => ['nullable', 'numeric', 'min:0', 'lte:sell_rate'],
             'min_quantity' => ['required', 'integer', 'min:1'],
             'max_quantity' => ['required', 'integer', 'min:1', 'gte:min_quantity'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'priority' => ['nullable', 'integer', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
+            'api_accessible' => ['nullable', 'boolean'],
+            'service_status' => ['nullable', 'integer', 'in:0,1,2,3,4'],
             'allow_multiple_reactions' => ['nullable', 'boolean'],
             'reaction_types' => ['nullable', 'array'],
             'reaction_types.*' => ['string'],
@@ -79,6 +86,7 @@ class StoreServiceRequest extends FormRequest
             'max_quantity.integer' => 'Số lượng tối đa phải là số nguyên.',
             'max_quantity.min' => 'Số lượng tối đa phải lớn hơn hoặc bằng 1.',
             'max_quantity.gte' => 'Số lượng tối đa phải lớn hơn hoặc bằng số lượng tối thiểu.',
+            'agent_price.lte' => 'Giá đại lý không được cao hơn giá bán.',
             'is_active.boolean' => 'Trạng thái phải là true hoặc false.',
             'platform.in' => 'Platform không hợp lệ. Phải là: 1 (Facebook), 2 (Tiktok), 3 (Twitter), 4 (Instagram), 5 (Youtube), 6 (Zalo).',
         ];

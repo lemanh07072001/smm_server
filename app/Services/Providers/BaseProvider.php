@@ -211,6 +211,56 @@ abstract class BaseProvider implements ProviderInterface
     }
 
     /**
+     * Lấy số dư tài khoản tại provider
+     * Mặc định dùng action=balance, override nếu provider có format khác
+     */
+    public function getBalance(): array
+    {
+        $url = $this->buildApiUrl();
+        $body = [
+            'key'    => $this->provider->api_key,
+            'action' => 'balance',
+        ];
+
+        try {
+            $response = Http::timeout(15)->asForm()->post($url, $body);
+
+            return [
+                'success'     => $response->successful(),
+                'status_code' => $response->status(),
+                'body'        => $response->body(),
+                'data'        => $response->json() ?? [],
+            ];
+        } catch (\Exception $e) {
+            return [
+                'success'     => false,
+                'status_code' => 0,
+                'body'        => $e->getMessage(),
+                'data'        => [],
+            ];
+        }
+    }
+
+    /**
+     * Parse balance từ response — override nếu provider trả về format khác
+     * Mặc định: {"balance": "123.45", "currency": "USD"}
+     * Trả về ['balance' => float, 'currency' => string] hoặc null nếu lỗi
+     */
+    public function parseBalanceResponse(array $response): ?array
+    {
+        $data = $response['data'] ?? [];
+
+        if (isset($data['balance'])) {
+            return [
+                'balance'  => (float) $data['balance'],
+                'currency' => $data['currency'] ?? 'USD',
+            ];
+        }
+
+        return null;
+    }
+
+    /**
      * Build request body for status check - override in child class
      */
     protected function buildStatusBody(string|array $orderIds): array

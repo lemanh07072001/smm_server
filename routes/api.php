@@ -1,10 +1,12 @@
 <?php
 
 use App\Http\Controllers\Api\AffiliateController;
+use App\Http\Controllers\Api\ApiOrderController;
+use App\Http\Controllers\Api\PartnerProviderController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BankAutoController;
 use App\Http\Controllers\Api\CategoryController;
-use App\Http\Controllers\Api\SepayController;
+use App\Http\Controllers\Api\Pay2sController;
 use App\Http\Controllers\Api\CategoryGroupController;
 use App\Http\Controllers\Api\CodeTransactionController;
 use App\Http\Controllers\Api\CountryController;
@@ -35,11 +37,9 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Webhook routes (public - không cần auth, không giới hạn rate limit)
-// Route::withoutMiddleware('throttle:api')->group(function () {
-//     Route::post('/webhook/macrodroid', [BankAutoController::class, 'macrodroidWebhook']);
-//     Route::post('/webhook/macrodroid/test', [BankAutoController::class, 'testWebhook']);
-//     Route::post('/webhook/sepay', [SepayController::class, 'webhook'])->middleware('sepay.webhook');
-// });
+Route::withoutMiddleware('throttle:api')->group(function () {
+    Route::post('/webhook/pay2s', [Pay2sController::class, 'webhook']);
+});
 
 // Public routes
 Route::middleware('throttle:auth')->group(function () {
@@ -94,6 +94,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/category-groups/{id}', [CategoryGroupController::class, 'update']);
     Route::delete('/category-groups/{id}', [CategoryGroupController::class, 'destroy']);
 
+    // Partner Providers (allowed - dành cho admin xem khi thêm provider)
+    Route::get('/partner-providers/allowed', [PartnerProviderController::class, 'allowed']);
+
     // Providers
     Route::get('/providers', [ProviderController::class, 'index']);
     Route::post('/providers', [ProviderController::class, 'store']);
@@ -101,7 +104,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/providers/{id}', [ProviderController::class, 'show']);
     Route::post('/providers/{id}', [ProviderController::class, 'update']);
     Route::delete('/providers/{id}', [ProviderController::class, 'destroy']);
-
 
     // Provider Services
     Route::get('/provider-services', [ProviderServiceController::class, 'index']);
@@ -123,7 +125,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Countries
     Route::get('/countries', [CountryController::class, 'index']);
-    Route::get('/countries/all', [CountryController::class, 'all']);
 
     // Users
     Route::get('/users', [UserController::class, 'index']);
@@ -134,6 +135,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/users/{id}', [UserController::class, 'destroy']);
     Route::post('/users/{id}/reset-password', [UserController::class, 'resetPassword']);
     Route::post('/users/{id}/generate-api-key', [UserController::class, 'generateApiKey']);
+    Route::post('/user/generate-api-key', [UserController::class, 'generateMyApiKey']);
+    Route::get('/user/api-key', [UserController::class, 'getMyApiKey']);
     Route::post('/users/{id}/adjust-balance', [UserController::class, 'adjustBalance']);
 
     // Orders
@@ -197,5 +200,31 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/affiliate/withdrawals', [AffiliateController::class, 'adminWithdrawals']);
     Route::post('/admin/affiliate/withdrawals/{id}/approve', [AffiliateController::class, 'approve']);
     Route::post('/admin/affiliate/withdrawals/{id}/reject', [AffiliateController::class, 'reject']);
+    Route::post('/admin/affiliate/users/{id}/commission-rate', [AffiliateController::class, 'setCommissionRate']);
 
+    // Admin Bank Auto
+    Route::post('/admin/bank-auto/{id}/approve', [BankAutoController::class, 'approve']);
+    Route::post('/admin/bank-auto/{id}/reject', [BankAutoController::class, 'reject']);
+
+});
+
+// Public API (xác thực qua api_token lưu trong DB)
+Route::middleware('api_key')->group(function () {
+    Route::post('/v2', [ApiOrderController::class, 'handle']);
+    Route::get('/v2', [ApiOrderController::class, 'handle']);
+});
+
+// Super Admin routes (dev only)
+Route::middleware(['auth:sanctum', 'super_admin'])->prefix('super-admin')->group(function () {
+    Route::get('/providers', [ProviderController::class, 'listSupport']);
+    Route::post('/providers/{id}/toggle-supported', [ProviderController::class, 'toggleSupported']);
+
+    // Partner Providers
+    Route::get('/partner-providers/all', [PartnerProviderController::class, 'all']);
+    Route::get('/partner-providers', [PartnerProviderController::class, 'index']);
+    Route::post('/partner-providers', [PartnerProviderController::class, 'store']);
+    Route::get('/partner-providers/{id}', [PartnerProviderController::class, 'show']);
+    Route::put('/partner-providers/{id}', [PartnerProviderController::class, 'update']);
+    Route::delete('/partner-providers/{id}', [PartnerProviderController::class, 'destroy']);
+    Route::post('/partner-providers/{id}/toggle', [PartnerProviderController::class, 'toggle']);
 });

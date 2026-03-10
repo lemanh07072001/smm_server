@@ -84,7 +84,7 @@ class OrderController extends Controller
         ];
 
         // Phân trang - orderBy id nhanh hơn created_at
-        $perPage = $request->get('per_page', 6);
+        $perPage = min((int) $request->get('per_page', 6), 100);
         $orders = $query->orderBy('id', 'desc')->paginate($perPage);
 
         return response()->json([
@@ -102,9 +102,16 @@ class OrderController extends Controller
      */
     public function getOrdersByUser(Request $request, int $userId): JsonResponse
     {
+        $authUser = $request->user();
+
+        // User thường chỉ được xem đơn hàng của chính mình
+        if (!$authUser->isAdmin() && $authUser->id !== $userId) {
+            return $this->errorResponse('Bạn không có quyền xem đơn hàng của người dùng khác.', 403);
+        }
+
         $search = $request->input('search');
         $status = $request->input('status');
-        $perPage = $request->input('per_page', 7);
+        $perPage = min((int) $request->input('per_page', 7), 100);
 
         // Query orders của user - chỉ select cột cần thiết
         $query = Order::select([
@@ -168,10 +175,11 @@ class OrderController extends Controller
             'service_id' => ['required', 'integer', 'exists:services,id'],
             'provider_service_id' => ['required', 'integer', 'exists:provider_services,id'],
             'link' => ['required', 'string', 'max:1000'],
-            'quantity' => ['required', 'integer', 'min:1'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:10000000'],
             'reactions' => ['nullable', 'array'],
-            'comments' => ['nullable', 'string'],
-            'livestream_duration' => ['nullable', 'integer', 'min:1'],
+            'comments' => ['nullable', 'string', 'max:5000'],
+            'livestream_duration' => ['nullable', 'integer', 'min:1', 'max:1440'],
+            'internal_note' => ['nullable', 'string', 'max:1000'],
         ]);
 
         // Convert newline thực thành literal \n để lưu DB
@@ -184,13 +192,40 @@ class OrderController extends Controller
 
         // Lấy Service với ProviderService và Provider (nested relationship)
         $service = Service::with(['providerService.provider'])
+            ->where('id', $validated['service_id'])
             ->where('provider_service_id', $validated['provider_service_id'])
+            ->where('is_active', 1)
             ->first();
 
         if (!$service) {
             return response()->json([
-                'message' => 'Service không tồn tại.',
+                'message' => 'Service không tồn tại hoặc đã bị tắt.',
             ], 404);
+        }
+
+        $blockedStatuses = [
+            Service::SERVICE_STATUS_MAINTENANCE => 'Dịch vụ đang bảo trì, vui lòng thử lại sau.',
+            Service::SERVICE_STATUS_STOPPED     => 'Dịch vụ đang tạm dừng, vui lòng thử lại sau.',
+            Service::SERVICE_STATUS_ERROR       => 'Dịch vụ đang lỗi, vui lòng thử lại sau.',
+        ];
+
+        if (isset($blockedStatuses[$service->service_status])) {
+            return response()->json([
+                'message' => $blockedStatuses[$service->service_status],
+            ], 422);
+        }
+
+        // Validate quantity theo giới hạn của service
+        $quantity = $validated['quantity'];
+        if ($quantity < $service->min_quantity) {
+            return response()->json([
+                'message' => "Số lượng tối thiểu là {$service->min_quantity}.",
+            ], 422);
+        }
+        if ($service->max_quantity && $quantity > $service->max_quantity) {
+            return response()->json([
+                'message' => "Số lượng tối đa là {$service->max_quantity}.",
+            ], 422);
         }
 
         // Lấy provider thông qua providerService
@@ -200,6 +235,12 @@ class OrderController extends Controller
             return response()->json([
                 'message' => 'Provider không tồn tại.',
             ], 404);
+        }
+
+        if (!$provider->is_active) {
+            return response()->json([
+                'message' => 'Nhà cung cấp dịch vụ hiện không hoạt động.',
+            ], 422);
         }
 
         // Kiểm tra provider có được hỗ trợ không
@@ -212,7 +253,6 @@ class OrderController extends Controller
         // Tính toán số tiền
         $costRate = $service->providerService->cost_rate;
         $sellRate = $service->getPriceForUser($user);
-        $quantity = $validated['quantity'];
         $livestreamDuration = $validated['livestream_duration'] ?? 0;
 
         // Platform fb_view_livestream: tính theo công thức giá × thời gian × số mắt
@@ -231,28 +271,39 @@ class OrderController extends Controller
 
         $profitAmount = $chargeAmount - $costAmount;
 
-        // Kiểm tra số dư của user
-        $user->refresh();
-        if ($user->balance < $chargeAmount) {
-            return response()->json([
-                'message' => 'Số dư không đủ để thực hiện đơn hàng.',
-                'balance' => (float) $user->balance,
-                'required' => (float) $chargeAmount,
-                'shortage' => (float) ($chargeAmount - $user->balance),
-            ], 400);
-        }
-
         DB::beginTransaction();
         try {
+            // Lock user row để tránh race condition khi trừ tiền đồng thời
+            $user = \App\Models\User::where('id', $user->id)->lockForUpdate()->first();
+
+            // Kiểm tra số dư bên trong transaction sau khi đã lock
+            if ($user->balance < $chargeAmount) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Số dư không đủ để thực hiện đơn hàng.',
+                    'balance' => (float) $user->balance,
+                    'required' => (float) $chargeAmount,
+                    'shortage' => (float) ($chargeAmount - $user->balance),
+                ], 400);
+            }
+
+            // Tạo internal_note tự động cho reseller, hoặc dùng note do user truyền vào
+            $internalNote = $validated['internal_note'] ?? null;
+            if ($user->role === \App\Models\User::ROLE_RESELLER && empty($internalNote)) {
+                $internalNote = "[Reseller] agent_price={$service->agent_price}, sell_rate={$sellRate}, charge={$chargeAmount}";
+            }
+
             // Tạo order trong database với status pending
             $order = Order::create([
                 'user_id' => $user->id,
+                'order_source' => 'web',
                 'service_id' => $validated['service_id'],
                 'provider_service_id' => $validated['provider_service_id'],
                 'link' => $validated['link'],
                 'quantity' => $quantity,
                 'livestream_duration' => $livestreamDuration ?: 0,
                 'comments' => $validated['comments'] ?? null,
+                'internal_note' => $internalNote,
                 'status' => Order::STATUS_PENDING,
                 'is_priority' => $service->priority ?? Order::PRIORITY[1],
                 'cost_rate' => $costRate,
@@ -279,10 +330,23 @@ class OrderController extends Controller
             // Load relationships
             $order->load(['user', 'service', 'providerService.provider']);
 
-            // Đẩy order vào Redis để command order_place xử lý
-            OrderHelper::saveOrderToRedis($order);
-
             DB::commit();
+
+            // Ghi log activity cho reseller (role = 2)
+            if ($user->role === \App\Models\User::ROLE_RESELLER) {
+                OrderActivityLogger::for($order->id)
+                    ->user($user->id)
+                    ->orderCreated([
+                        'role'         => 'reseller',
+                        'service_id'   => $order->service_id,
+                        'service_name' => $service->name,
+                        'quantity'     => $quantity,
+                        'sell_rate'    => $sellRate,
+                        'agent_price'  => $service->agent_price,
+                        'charge_amount'=> $chargeAmount,
+                        'link'         => $order->link,
+                    ]);
+            }
 
             return response()->json([
                 'message' => 'Tạo đơn hàng thành công.',
@@ -313,6 +377,12 @@ class OrderController extends Controller
      */
     public function getStatsByUser(Request $request, int $userId): JsonResponse
     {
+        $authUser = $request->user();
+
+        if (!$authUser->isAdmin() && $authUser->id !== $userId) {
+            return $this->errorResponse('Bạn không có quyền xem thống kê của người dùng khác.', 403);
+        }
+
         $fromDate = $request->input('from_date');
         $toDate = $request->input('to_date');
 
@@ -404,7 +474,7 @@ class OrderController extends Controller
             $this->cancelOrderAtProvider($order, $logger);
 
             // Cập nhật order và hoàn tiền
-            $this->updateOrderAndRefund($order, $logger);
+            $this->updateOrderAndRefund($order, $logger, $user->id);
 
             DB::commit();
 
@@ -433,8 +503,8 @@ class OrderController extends Controller
      */
     private function canUserCancelOrder($user, Order $order): bool
     {
-        // Admin (role = 0) có thể hủy mọi đơn, user chỉ hủy được đơn của mình
-        return $user->role === 0 || $order->user_id === $user->id;
+        // Admin/Super-admin có thể hủy mọi đơn, user chỉ hủy được đơn của mình
+        return $user->isAdmin() || $order->user_id === $user->id;
     }
 
     /**
@@ -484,14 +554,42 @@ class OrderController extends Controller
     }
 
     /**
-     * Cập nhật order status
+     * Cập nhật order status và hoàn tiền cho user
      */
-    private function updateOrderAndRefund(Order $order, OrderActivityLogger $logger): void
+    private function updateOrderAndRefund(Order $order, OrderActivityLogger $logger, int $canceledBy): void
     {
-        // Cập nhật order status về Processing khi hủy
-        $order->update([
-            'status' => Order::STATUS_PROCESSING,
-        ]);
+        $canceledData = [
+            'canceled_at' => now(),
+            'canceled_by' => $canceledBy,
+        ];
+
+        // Chưa gửi lên provider → hoàn tiền ngay, set CANCELED luôn
+        if (!$order->provider_order_id) {
+            $refundAmount = (float) $order->charge_amount;
+
+            $order->update(array_merge($canceledData, [
+                'status'        => Order::STATUS_CANCELED,
+                'refund_amount' => $refundAmount,
+            ]));
+
+            if ($refundAmount > 0) {
+                $user = \App\Models\User::lockForUpdate()->find($order->user_id);
+                if ($user) {
+                    Dongtien::createTransaction(
+                        $user,
+                        $refundAmount,
+                        Dongtien::TYPE_REFUND,
+                        "Hoàn tiền đơn hàng #{$order->id} đã hủy",
+                        ['order_id' => $order->id]
+                    );
+                }
+            }
+        } else {
+            // Đã gửi lên provider → chờ provider xử lý hoàn (STATUS_PROCESSING)
+            $order->update(array_merge($canceledData, [
+                'status' => Order::STATUS_PROCESSING,
+            ]));
+        }
 
         $logger->orderCanceled();
     }

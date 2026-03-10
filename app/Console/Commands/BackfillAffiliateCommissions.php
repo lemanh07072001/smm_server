@@ -65,7 +65,7 @@ class BackfillAffiliateCommissions extends Command
             $this->info("  User #{$user->id} ({$user->name}) → Referrer #{$referrer->id} ({$referrer->name}): {$orders->count()} đơn");
 
             foreach ($orders as $order) {
-                $commissionRate = 10.00;
+                $commissionRate = (float) ($referrer->affiliate_commission_rate ?? 10.00);
                 $orderAmount = (float) $order->charge_amount;
                 $commissionAmount = round($orderAmount * $commissionRate / 100, 2);
 
@@ -73,7 +73,7 @@ class BackfillAffiliateCommissions extends Command
                     continue;
                 }
 
-                $this->line("    Order #{$order->id}: {$orderAmount} × 10% = {$commissionAmount}");
+                $this->line("    Order #{$order->id}: {$orderAmount} × {$commissionRate}% = {$commissionAmount}");
 
                 if (!$dryRun) {
                     DB::beginTransaction();

@@ -405,6 +405,55 @@ class OmoProvider extends BaseProvider
     }
 
     /**
+     * Override getBalance cho OMO
+     * OMO dùng JSON body và endpoint /api/check_balance
+     */
+    public function getBalance(): array
+    {
+        $baseUrl = rtrim($this->provider->api_url, '/');
+        $url = $baseUrl . '/api/check_balance';
+
+        try {
+            $response = Http::timeout(15)
+                ->withHeaders(['Content-Type' => 'application/json'])
+                ->post($url, ['KeyApi' => $this->provider->api_key]);
+
+            return [
+                'success'     => $response->successful(),
+                'status_code' => $response->status(),
+                'body'        => $response->body(),
+                'data'        => $response->json() ?? [],
+            ];
+        } catch (\Exception $e) {
+            return [
+                'success'     => false,
+                'status_code' => 0,
+                'body'        => $e->getMessage(),
+                'data'        => [],
+            ];
+        }
+    }
+
+    /**
+     * Parse balance response của OMO
+     * Response: {"Balance": 123456.78}
+     */
+    public function parseBalanceResponse(array $response): ?array
+    {
+        $data = $response['data'] ?? [];
+        $balance = $data['Balance'] ?? $data['balance'] ?? null;
+
+        if ($balance !== null) {
+            return [
+                'balance'  => (float) $balance,
+                'currency' => 'VND',
+            ];
+        }
+
+        return null;
+    }
+
+    /**
      * Map status từ OMO sang hệ thống
      * OMO sử dụng các trạng thái:
      * - "WAITING", "PENDING", "RUNNING", "SUCCESS", "FAIL", "CANCEL"

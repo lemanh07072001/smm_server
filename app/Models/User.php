@@ -17,7 +17,8 @@ class User extends Authenticatable
     public const ROLE_ADMIN = 0;
     public const ROLE_USER = 1;
     public const ROLE_RESELLER = 2;
-    public const ROLES = [self::ROLE_ADMIN, self::ROLE_USER, self::ROLE_RESELLER];
+    public const ROLE_SUPER_ADMIN = 3;
+    public const ROLES = [self::ROLE_ADMIN, self::ROLE_USER, self::ROLE_RESELLER, self::ROLE_SUPER_ADMIN];
 
     /**
      * The attributes that are mass assignable.
@@ -32,9 +33,11 @@ class User extends Authenticatable
         'balance',
         'discount',
         'api_key',
+        'api_token',
         'is_active',
         'referred_by',
         'affiliate_balance',
+        'affiliate_commission_rate',
     ];
 
     /**
@@ -61,6 +64,7 @@ class User extends Authenticatable
         'is_active' => 'boolean',
         'referred_by' => 'integer',
         'affiliate_balance' => 'decimal:6',
+        'affiliate_commission_rate' => 'decimal:2',
     ];
 
     /**
@@ -68,7 +72,7 @@ class User extends Authenticatable
      */
     public function isAdmin(): bool
     {
-        return $this->role === self::ROLE_ADMIN;
+        return in_array($this->role, [self::ROLE_ADMIN, self::ROLE_SUPER_ADMIN]);
     }
 
     /**
@@ -85,6 +89,11 @@ class User extends Authenticatable
     public function isReseller(): bool
     {
         return $this->role === self::ROLE_RESELLER;
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === self::ROLE_SUPER_ADMIN;
     }
 
     /**

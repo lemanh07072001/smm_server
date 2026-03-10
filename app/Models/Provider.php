@@ -16,6 +16,7 @@ class Provider extends Model
         'api_url',
         'api_key',
         'balance',
+        'balance_currency',
         'balance_updated_at',
         'is_active',
         'notes',
@@ -25,7 +26,7 @@ class Provider extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'balance' => 'decimal:6',
-        'balance_updated_at' => 'datetime',
+        'balance_updated_at' => 'datetime:Y-m-d H:i:s',
     ];
 
     public function services(): HasMany

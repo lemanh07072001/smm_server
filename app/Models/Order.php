@@ -49,12 +49,14 @@ class Order extends Model
      */
     protected $fillable = [
         'user_id',
+        'order_source',
         'service_id',
         'provider_service_id',
         'provider_order_id',
         'link',
         'quantity',
         'comments',
+        'internal_note',
         'start_count',
         'remains',
         'status',
@@ -74,6 +76,8 @@ class Order extends Model
         'livestream_duration',
         'retry_count',
         'is_priority',
+        'canceled_at',
+        'canceled_by',
     ];
 
     /**
@@ -99,6 +103,7 @@ class Order extends Model
         'final_profit' => 'decimal:2',
         'is_finalized' => 'boolean',
         'completed_at' => 'datetime',
+        'canceled_at' => 'datetime',
         'lost_count' => 'integer',
         'livestream_duration' => 'integer',
         'retry_count' => 'integer',

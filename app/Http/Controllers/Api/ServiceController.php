@@ -10,6 +10,7 @@ use App\Models\Service;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class ServiceController extends Controller
 {
@@ -232,6 +233,11 @@ class ServiceController extends Controller
             if ($categoryGroupId !== null) {
                 $query->where('category_group_id', $categoryGroupId);
             }
+
+            // Only include services whose provider is active
+            $query->whereHas('providerService.provider', function ($q) {
+                $q->where('is_active', true);
+            });
 
             $services = $query->get();
 

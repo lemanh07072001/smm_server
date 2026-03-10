@@ -15,6 +15,7 @@ class BankAuto extends Model
 
     protected $fillable = [
         'tid',
+        'transaction_code',
         'description',
         'date',
         'data',

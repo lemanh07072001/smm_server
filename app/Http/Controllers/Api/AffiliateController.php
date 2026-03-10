@@ -79,9 +79,13 @@ class AffiliateController extends Controller
     {
         $user = $request->user();
 
+        $frontendUrl = rtrim(config('app.frontend_url', config('app.url')), '/');
+
         return response()->json([
             'ref_id' => $user->id,
             'ref_param' => '?ref=' . $user->id,
+            'affiliate_link' => $frontendUrl . '/register?ref=' . $user->id,
+            'commission_rate' => (float) ($user->affiliate_commission_rate ?? 10.00),
         ]);
     }
 
@@ -143,6 +147,29 @@ class AffiliateController extends Controller
     }
 
     // ==================== Admin Endpoints ====================
+
+    /**
+     * [Admin] Cập nhật % hoa hồng cho user
+     */
+    public function setCommissionRate(Request $request, int $userId): JsonResponse
+    {
+        if (!$request->user()->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'commission_rate' => ['required', 'numeric', 'min:0', 'max:100'],
+        ]);
+
+        $user = User::findOrFail($userId);
+        $user->update(['affiliate_commission_rate' => $request->commission_rate]);
+
+        return response()->json([
+            'message' => 'Đã cập nhật % hoa hồng.',
+            'user_id' => $user->id,
+            'affiliate_commission_rate' => (float) $user->affiliate_commission_rate,
+        ]);
+    }
 
     /**
      * [Admin] Danh sách yêu cầu rút tiền

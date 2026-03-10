@@ -11,6 +11,21 @@ class Service extends Model
 {
     use HasFactory;
 
+    // Service status
+    public const SERVICE_STATUS_ACTIVE      = 0;
+    public const SERVICE_STATUS_MAINTENANCE = 1;
+    public const SERVICE_STATUS_SLOW        = 2;
+    public const SERVICE_STATUS_STOPPED     = 3;
+    public const SERVICE_STATUS_ERROR       = 4;
+
+    public const SERVICE_STATUSES = [
+        self::SERVICE_STATUS_ACTIVE      => 'Hoạt động',
+        self::SERVICE_STATUS_MAINTENANCE => 'Bảo trì',
+        self::SERVICE_STATUS_SLOW        => 'Đang chậm',
+        self::SERVICE_STATUS_STOPPED     => 'Tạm dừng',
+        self::SERVICE_STATUS_ERROR       => 'Lỗi',
+    ];
+
     // Priority types
     public const PRIORITY_VERY_SLOW = 0;
     public const PRIORITY_SLOW = 1;
@@ -119,11 +134,14 @@ class Service extends Model
         'name',
         'description',
         'sell_rate',
+        'agent_price',
         'min_quantity',
         'max_quantity',
         'sort_order',
         'priority',
         'is_active',
+        'service_status',
+        'api_accessible',
         'allow_multiple_reactions',
         'reaction_types',
         'platform',
@@ -135,11 +153,14 @@ class Service extends Model
         'group_id' => 'string',
         'provider_service_id' => 'integer',
         'sell_rate' => 'decimal:2',
+        'agent_price' => 'decimal:2',
         'min_quantity' => 'integer',
         'max_quantity' => 'integer',
         'sort_order' => 'integer',
         'priority' => 'integer',
         'is_active' => 'boolean',
+        'service_status' => 'integer',
+        'api_accessible' => 'boolean',
         'allow_multiple_reactions' => 'boolean',
         'reaction_types' => 'array',
         'platform' => 'string',
@@ -168,6 +189,10 @@ class Service extends Model
 
     public function getPriceForUser(User $user): float
     {
+        if ($user->role === User::ROLE_RESELLER && $this->agent_price !== null) {
+            return (float) $this->agent_price;
+        }
+
         return (float) $this->sell_rate;
     }
 

@@ -5,10 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreProviderRequest;
 use App\Http\Requests\UpdateProviderRequest;
+use App\Models\PartnerProvider;
 use App\Models\Provider;
 use App\Services\ImageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class ProviderController extends Controller
 {
@@ -56,6 +58,14 @@ class ProviderController extends Controller
     {
         $data = $request->validated();
 
+        // Kiểm tra partner_provider có đang bị khóa không
+        $partner = PartnerProvider::where('code', $data['code'])->first();
+        if ($partner && !$partner->is_allowed) {
+            return response()->json([
+                'message' => "Không thể thêm provider [{$data['code']}] vì đối tác này đang bị Super Admin khóa.",
+            ], 403);
+        }
+
         $provider = Provider::create($data);
 
         return response()->json([
@@ -79,6 +89,16 @@ class ProviderController extends Controller
         $provider = Provider::findOrFail($id);
         $data = $request->validated();
 
+        // Nếu cố bật is_active nhưng partner_provider đang bị khóa thì chặn
+        if (!empty($data['is_active'])) {
+            $partner = PartnerProvider::where('code', $provider->code)->first();
+            if ($partner && !$partner->is_allowed) {
+                return response()->json([
+                    'message' => "Không thể bật provider [{$provider->code}] vì đối tác này đang bị Super Admin khóa.",
+                ], 403);
+            }
+        }
+
         // Don't update api_key if not provided
         if (empty($data['api_key'])) {
             unset($data['api_key']);
@@ -86,6 +106,13 @@ class ProviderController extends Controller
 
         $provider->update($data);
         $provider->makeVisible('api_key');
+
+        // Clear services cache so provider is_active changes take effect immediately
+        $cacheKeys = Cache::get('services_cache_keys', []);
+        foreach ($cacheKeys as $key) {
+            Cache::forget($key);
+        }
+        Cache::forget('services_cache_keys');
 
         return response()->json([
             'message' => 'Cập nhật provider thành công.',

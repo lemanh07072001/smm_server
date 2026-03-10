@@ -76,11 +76,22 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
+        // Tạo api_token nếu chưa có hoặc chưa phải format Sanctum ({id}|{hash})
+        if (!$user->api_token || !str_contains($user->api_token, '|')) {
+            // Xóa sanctum token api cũ nếu có
+            $user->tokens()->where('name', 'api_token')->delete();
+            // Tạo Sanctum token và lưu plaintext vào cột api_token
+            $apiTokenPlain = $user->createToken('api_token')->plainTextToken;
+            $user->update(['api_token' => $apiTokenPlain]);
+            $user->refresh();
+        }
+
         return response()->json([
             'message' => __('auth.login_success'),
             'user' => $user,
             'access_token' => $token,
             'token_type' => 'Bearer',
+            'api_token' => $user->api_token,
         ]);
     }
 
