@@ -503,8 +503,8 @@ class OrderController extends Controller
      */
     private function canUserCancelOrder($user, Order $order): bool
     {
-        // Admin (role = 0) có thể hủy mọi đơn, user chỉ hủy được đơn của mình
-        return $user->role === 0 || $order->user_id === $user->id;
+        // Admin/Super-admin có thể hủy mọi đơn, user chỉ hủy được đơn của mình
+        return $user->isAdmin() || $order->user_id === $user->id;
     }
 
     /**
