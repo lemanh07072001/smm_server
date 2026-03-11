@@ -108,7 +108,6 @@ class PlaceOrder extends Command
                     ->first();
 
                 if (!$order) {
-                    $this->warn("Order #{$orderId} không tồn tại hoặc đã được xử lý.");
                     RedisHelper::del($lockKey);
                     usleep(100000);
                     continue;
