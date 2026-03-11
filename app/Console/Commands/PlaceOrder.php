@@ -55,86 +55,101 @@ class PlaceOrder extends Command
     {
         $this->info('Bắt đầu xử lý orders is_priority = 0 (chạy liên tục)...');
         $this->info('Redis key: ' . Order::KEY_ID_REDIS_ORDER_PRIORITY_0);
-        $processId = getmypid();
-        $this->info("Process ID: {$processId}");
+        $this->info('Process ID: ' . getmypid());
+
+        $startTime = time();
+        $timeoutSeconds = 600; // tự thoát sau 10 phút, supervisor/schedule restart lại
 
         while (true) {
+            if ((time() - $startTime) >= $timeoutSeconds) {
+                $this->info('Đã chạy đủ ' . $timeoutSeconds . 's, thoát để restart.');
+                break;
+            }
+
             $orderJson = RedisHelper::rpop(Order::KEY_ID_REDIS_ORDER_PRIORITY_0);
 
-            if ($orderJson) {
-                $decoded = json_decode($orderJson, true);
+            if (!$orderJson) {
+                usleep(100000); // 100ms
+                continue;
+            }
 
-                if ($decoded && isset($decoded['id'])) {
-                    $orderId = $decoded['id'];
+            $decoded = json_decode($orderJson, true);
 
-                    // Kiểm tra retry_after
-                    if (isset($decoded['retry_after']) && time() < $decoded['retry_after']) {
-                        RedisHelper::lpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, $orderJson);
-                        usleep(100000);
-                        continue;
-                    }
+            if (!$decoded || !isset($decoded['id'])) {
+                usleep(100000);
+                continue;
+            }
 
-                    // Kiểm tra lock
-                    $lockKey = "place_order_lock:order:{$orderId}";
-                    $isLocked = RedisHelper::exists($lockKey);
+            $orderId = $decoded['id'];
 
-                    if (!$isLocked) {
-                        $this->warn("Order #{$orderId} chưa được lock, bỏ qua.");
-                        usleep(100000);
-                        continue;
-                    }
+            // Kiểm tra retry_after - push lại cuối queue nếu chưa đến lúc retry
+            if (isset($decoded['retry_after']) && time() < $decoded['retry_after']) {
+                RedisHelper::rpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, $orderJson);
+                usleep(100000);
+                continue;
+            }
 
-                    try {
-                        $order = Order::with(['user', 'service.providerService.provider'])
-                            ->where('id', $orderId)
-                            ->where('status', Order::STATUS_PENDING)
-                            ->whereNull('provider_order_id')
-                            ->first();
+            // Atomic lock để tránh race condition khi chạy nhiều process song song.
+            // Ai set được NX thì mới xử lý, không cần lock riêng từ scan nữa.
+            $lockKey = "place_order_lock:order:{$orderId}";
+            $locked  = RedisHelper::acquireLock($lockKey, getmypid(), 120);
 
-                        if (!$order) {
-                            $this->warn("Order #{$orderId} không tồn tại hoặc đã được xử lý.");
-                            RedisHelper::del($lockKey);
-                            usleep(100000);
-                            continue;
-                        }
+            if (!$locked) {
+                // Process khác đang xử lý order này
+                usleep(100000);
+                continue;
+            }
 
-                        $result = $this->callProviderApi($order);
+            try {
+                $order = Order::with(['user', 'service.providerService.provider'])
+                    ->where('id', $orderId)
+                    ->where('status', Order::STATUS_PENDING)
+                    ->whereNull('provider_order_id')
+                    ->first();
 
-                        if ($result['success']) {
-                            $this->applySuccessUpdate($order, $result);
-                            $this->info("Order #{$order->id}: OK -> Provider Order: {$result['provider_order_id']}");
-                            Log::info("PlaceOrder ADD: #{$order->id} -> ID: {$result['provider_order_id']}");
-                            RedisHelper::del($lockKey);
-                        } elseif (!empty($result['skip_retry'])) {
-                            // Provider bị tắt tạm → giữ pending, release lock để scan có thể retry sau
-                            $this->warn("Order #{$order->id}: Provider bị tắt → giữ pending, release lock.");
-                            RedisHelper::del($lockKey);
-                        } else {
-                            $currentRetry = $order->retry_count ?? 0;
-                            $newRetry = $currentRetry + 1;
+                if (!$order) {
+                    $this->warn("Order #{$orderId} không tồn tại hoặc đã được xử lý.");
+                    RedisHelper::del($lockKey);
+                    usleep(100000);
+                    continue;
+                }
 
-                            if ($newRetry >= Order::RETRY_COUNT) {
-                                $this->applyFailedUpdate($order, $result['error'], $newRetry);
-                                $this->error("Order #{$order->id}: FAILED sau " . Order::RETRY_COUNT . " lần -> STATUS_FAILED");
-                                Log::error("PlaceOrder ADD: #{$order->id} -> FAILED -> STATUS_FAILED");
-                                RedisHelper::del($lockKey);
-                            } else {
-                                $order->retry_count = $newRetry;
-                                $order->save();
+                $result = $this->callProviderApi($order);
 
-                                $decoded['retry_count'] = $newRetry;
-                                $decoded['retry_after'] = time() + 2;
-                                RedisHelper::lpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, json_encode($decoded));
+                if ($result['success']) {
+                    $this->applySuccessUpdate($order, $result);
+                    $this->info("Order #{$order->id}: OK -> Provider Order: {$result['provider_order_id']}");
+                    Log::info("PlaceOrder ADD: #{$order->id} -> ID: {$result['provider_order_id']}");
+                    RedisHelper::del($lockKey);
+                } elseif (!empty($result['skip_retry'])) {
+                    // Provider bị tắt tạm → giữ pending, scan sẽ push lại sau
+                    $this->warn("Order #{$order->id}: Provider bị tắt → giữ pending.");
+                    RedisHelper::del($lockKey);
+                } else {
+                    $currentRetry = $order->retry_count ?? 0;
+                    $newRetry     = $currentRetry + 1;
 
-                                $this->warn("Order #{$order->id}: Lỗi lần {$newRetry}/" . Order::RETRY_COUNT . " - {$result['error']} -> Queue lại");
-                                // KHÔNG release lock - giữ để retry
-                            }
-                        }
-                    } catch (\Exception $e) {
-                        $this->error("Order #{$orderId}: Exception - {$e->getMessage()}");
+                    if ($newRetry >= Order::RETRY_COUNT) {
+                        $this->applyFailedUpdate($order, $result['error'], $newRetry);
+                        $this->error("Order #{$order->id}: FAILED sau " . Order::RETRY_COUNT . " lần -> STATUS_FAILED");
+                        Log::error("PlaceOrder ADD: #{$order->id} -> FAILED -> STATUS_FAILED");
                         RedisHelper::del($lockKey);
+                    } else {
+                        $order->retry_count = $newRetry;
+                        $order->save();
+
+                        $decoded['retry_count'] = $newRetry;
+                        $decoded['retry_after'] = time() + 2;
+                        // Đẩy về cuối queue để không block các order khác
+                        RedisHelper::rpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, json_encode($decoded));
+
+                        $this->warn("Order #{$order->id}: Lỗi lần {$newRetry}/" . Order::RETRY_COUNT . " - {$result['error']} -> Queue lại");
+                        RedisHelper::del($lockKey); // release để retry lần sau acquire lại
                     }
                 }
+            } catch (\Exception $e) {
+                $this->error("Order #{$orderId}: Exception - {$e->getMessage()}");
+                RedisHelper::del($lockKey);
             }
 
             usleep(100000); // 100ms
@@ -143,14 +158,19 @@ class PlaceOrder extends Command
 
    
     /**
-     * Quét orders STATUS_PENDING, retry_count < RETRY_COUNT và đẩy vào queue
+     * Fallback/recovery: quét orders STATUS_PENDING bị sót (chưa được push bởi Controller)
      * Chạy bằng: php artisan order_place scan
+     *
+     * Không cần acquire lock ở đây - handleAddPriority sẽ atomic lock khi pop ra.
+     * scan chỉ đảm bảo order được có mặt trong queue; duplicate trong queue không sao
+     * vì handleAddPriority kiểm tra DB (status=pending, provider_order_id IS NULL).
      */
     protected function handleScan()
     {
-        $this->info('Bắt đầu quét orders STATUS_PENDING, retry_count < ' . Order::RETRY_COUNT . '...');
-        $processId = getmypid();
-        $this->info("Process ID: {$processId}");
+        $this->info('Bắt đầu quét (fallback) orders STATUS_PENDING bị sót...');
+
+        // Chỉ lấy order cũ hơn 2 phút để tránh race với Controller vừa push xong
+        $cutoff = now()->subMinutes(2);
 
         $orders = Order::where('status', Order::STATUS_PENDING)
             ->whereNull('provider_order_id')
@@ -158,43 +178,71 @@ class PlaceOrder extends Command
                 $q->whereNull('retry_count')
                   ->orWhere('retry_count', '<', Order::RETRY_COUNT);
             })
+            ->where('created_at', '<=', $cutoff)
             ->orderBy('id', 'asc')
             ->cursor();
 
-        $successCount = 0;
-        $skippedCount = 0;
+        $pushed  = 0;
+        $skipped = 0;
 
-        foreach ($orders as $order) {
-            $lockKey = "place_order_lock:order:{$order->id}";
+        // Chunk để tránh load toàn bộ cursor vào RAM cùng lúc
+        $chunkBuffer = [];
+        $chunkSize   = 500;
 
-            $lockAcquired = RedisHelper::acquireLock($lockKey, $processId, 600);
+        $flushChunk = function (array $chunk) use (&$pushed, &$skipped) {
+            // Batch check lock bằng Redis pipeline: 1 round-trip cho N keys
+            $lockKeys = array_map(
+                fn($o) => 'place_order_lock:order:' . $o->id,
+                $chunk
+            );
 
-            if (!$lockAcquired) {
-                $skippedCount++;
-                continue;
+            $existsResults = Redis::pipeline(function ($pipe) use ($lockKeys) {
+                foreach ($lockKeys as $key) {
+                    $pipe->exists($key);
+                }
+            });
+
+            $priorityPush = [];
+            $normalPush   = [];
+
+            foreach ($chunk as $i => $order) {
+                if ($existsResults[$i]) {
+                    $skipped++;
+                    continue;
+                }
+                $orderData = json_encode(['id' => $order->id]);
+                if ($order->is_priority == Order::PRIORITY[0]) {
+                    $priorityPush[] = $orderData;
+                } else {
+                    $normalPush[] = $orderData;
+                }
+                $pushed++;
             }
 
-            try {
-                $orderData = json_encode(['id' => $order->id]);
+            // Batch push vào queue: 1 LPUSH / 1 RPUSH cho cả chunk
+            if (!empty($priorityPush)) {
+                Redis::lpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, ...$priorityPush);
+            }
+            if (!empty($normalPush)) {
+                Redis::rpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, ...$normalPush);
+            }
+        };
 
-                if ($orderData === false) {
-                    throw new \RuntimeException("json_encode thất bại cho order #{$order->id}");
-                }
+        foreach ($orders as $order) {
+            $chunkBuffer[] = $order;
 
-                if (isset($order->is_priority) && $order->is_priority == Order::PRIORITY[0]) {
-                    RedisHelper::lpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, $orderData);
-                } else {
-                    RedisHelper::rpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, $orderData);
-                }
-
-                $successCount++;
-            } catch (\Exception $e) {
-                $this->error("Order #{$order->id}: Exception - {$e->getMessage()}");
-                RedisHelper::del($lockKey);
+            if (count($chunkBuffer) >= $chunkSize) {
+                $flushChunk($chunkBuffer);
+                $chunkBuffer = [];
             }
         }
 
-        $this->info("Hoàn thành! Push {$successCount} orders vào queue, bỏ qua: {$skippedCount}");
+        // Flush phần còn lại chưa đủ chunk
+        if (!empty($chunkBuffer)) {
+            $flushChunk($chunkBuffer);
+        }
+
+        $this->info("Hoàn thành! Pushed: {$pushed}, Skipped (đang xử lý): {$skipped}");
         return 0;
     }
 
@@ -254,9 +302,10 @@ class PlaceOrder extends Command
     protected function processStatusBatch($orders): void
     {
         // Batch size tối đa mỗi lần gọi API (tránh request quá lớn)
-        $apiBatchSize = 100;
-        $sleepBetweenBatchMs = 500; // 500ms giữa các lần gọi API
-        $circuitBreakerLimit = 10;  // Số batch thất bại liên tiếp → ngắt provider
+        $apiBatchSize        = 100;
+        $minSleepMs          = 100;  // tối thiểu 100ms (thay vì cứng 500ms)
+        $maxSleepMs          = 2000; // tối đa 2s khi provider chậm
+        $circuitBreakerLimit = 10;   // Số batch thất bại liên tiếp → ngắt provider
 
         try {
             $firstOrder = $orders->first();
@@ -304,6 +353,8 @@ class PlaceOrder extends Command
                     break;
                 }
 
+                $batchStartTime = microtime(true);
+
                 try {
                     // 1 lần gọi API cho toàn bộ batch, retry tối đa 2 lần nếu timeout/lỗi
                     $statusResponse = $this->callWithRetry(
@@ -345,69 +396,72 @@ class PlaceOrder extends Command
                         }
 
                         $consecutiveFails++;
-                        usleep($sleepBetweenBatchMs * 1000);
-                        continue;
+                    } else {
+                        $consecutiveFails = 0; // reset khi thành công
+
+                        $parsedData = $providerService->parseStatusResponse($statusResponse);
+
+                        // Dùng bulk update thay vì update từng row
+                        $bulkUpdates = [];
+
+                        foreach ($providerOrderIds as $providerOrderId) {
+                            $statusData = $parsedData[$providerOrderId] ?? null;
+                            $order = $orderMap->get($providerOrderId);
+
+                            if (!$order) {
+                                continue;
+                            }
+
+                            if (!$statusData) {
+                                $this->warn("Order #{$order->id} (provider: {$providerOrderId}): Không có status trong response.");
+                                continue;
+                            }
+
+                            $updateData = [];
+
+                            if (isset($statusData['start_count'])) {
+                                $updateData['start_count'] = $statusData['start_count'];
+                            }
+                            if (isset($statusData['remains'])) {
+                                $updateData['remains'] = $statusData['remains'];
+                            }
+                            if (!empty($statusData['status'])) {
+                                $mappedStatus = $providerService->mapProviderStatus($statusData['status']);
+                                $updateData['status'] = $mappedStatus;
+                                $this->line("  Order #{$order->id} | provider_id: {$providerOrderId} | raw: '{$statusData['status']}' → mapped: '{$mappedStatus}'");
+                                OrderActivityLogger::for($order->id)
+                                    ->provider($provider->code, $providerOrderId)
+                                    ->statusResponse($statusData);
+                            }
+                            // Lỗi per-order từ provider (vd: "Incorrect order id")
+                            if (!empty($statusData['error'])) {
+                                $updateData['status'] = Order::STATUS_FAILED;
+                                $this->warn("  Order #{$order->id} | provider_id: {$providerOrderId} | error: '{$statusData['error']}'");
+                                OrderActivityLogger::for($order->id)
+                                    ->provider($provider->code, $providerOrderId)
+                                    ->error($statusData['error']);
+                            }
+
+                            if (!empty($updateData)) {
+                                $bulkUpdates[] = ['id' => $order->id, 'data' => $updateData, 'provider_status' => $statusData['status'] ?? '?'];
+                            }
+                        }
+
+                        // Thực hiện bulk update theo từng nhóm status giống nhau
+                        $this->applyBulkStatusUpdates($bulkUpdates);
                     }
-
-                    $consecutiveFails = 0; // reset khi thành công
-
-                    $parsedData = $providerService->parseStatusResponse($statusResponse);
-
-                    // Dùng bulk update thay vì update từng row
-                    $bulkUpdates = [];
-
-                    foreach ($providerOrderIds as $providerOrderId) {
-                        $statusData = $parsedData[$providerOrderId] ?? null;
-                        $order = $orderMap->get($providerOrderId);
-
-                        if (!$order) {
-                            continue;
-                        }
-
-                        if (!$statusData) {
-                            $this->warn("Order #{$order->id} (provider: {$providerOrderId}): Không có status trong response.");
-                            continue;
-                        }
-
-                        $updateData = [];
-
-                        if (isset($statusData['start_count'])) {
-                            $updateData['start_count'] = $statusData['start_count'];
-                        }
-                        if (isset($statusData['remains'])) {
-                            $updateData['remains'] = $statusData['remains'];
-                        }
-                        if (!empty($statusData['status'])) {
-                            $mappedStatus = $providerService->mapProviderStatus($statusData['status']);
-                            $updateData['status'] = $mappedStatus;
-                            $this->line("  Order #{$order->id} | provider_id: {$providerOrderId} | raw: '{$statusData['status']}' → mapped: '{$mappedStatus}'");
-                            OrderActivityLogger::for($order->id)
-                                ->provider($provider->code, $providerOrderId)
-                                ->statusResponse($statusData);
-                        }
-                        // Lỗi per-order từ provider (vd: "Incorrect order id")
-                        if (!empty($statusData['error'])) {
-                            $updateData['status'] = Order::STATUS_FAILED;
-                            $this->warn("  Order #{$order->id} | provider_id: {$providerOrderId} | error: '{$statusData['error']}'");
-                            OrderActivityLogger::for($order->id)
-                                ->provider($provider->code, $providerOrderId)
-                                ->error($statusData['error']);
-                        }
-
-                        if (!empty($updateData)) {
-                            $bulkUpdates[] = ['id' => $order->id, 'data' => $updateData, 'provider_status' => $statusData['status'] ?? '?'];
-                        }
-                    }
-
-                    // Thực hiện bulk update theo từng nhóm status giống nhau
-                    $this->applyBulkStatusUpdates($bulkUpdates);
                 } catch (\Exception $e) {
                     $this->error("Provider {$provider->code} batch error: {$e->getMessage()}");
                     Log::error("PlaceOrder STATUS batch: provider={$provider->code} -> {$e->getMessage()}");
                 }
 
-                // Throttle giữa các lần gọi API để tránh rate limit
-                usleep($sleepBetweenBatchMs * 1000);
+                // Adaptive throttle: đo thời gian thực tế của batch, chỉ sleep phần còn thiếu
+                // Mục tiêu tối thiểu $minSleepMs giữa 2 batch để tránh rate limit
+                $elapsedMs = (microtime(true) - $batchStartTime) * 1000;
+                $remainMs  = $minSleepMs - (int) $elapsedMs;
+                if ($remainMs > 0) {
+                    usleep(min($remainMs, $maxSleepMs) * 1000);
+                }
             }
         } catch (\Exception $e) {
             $this->error("processStatusBatch: {$e->getMessage()}");
@@ -496,23 +550,22 @@ class PlaceOrder extends Command
                     Order::whereIn('id', $group['ids'])->update($group['data']);
                 }
 
-                // Xử lý hoàn tiền cho từng order
+                // Tính refund cho từng order, group theo user_id để gộp vào 1 transaction/user
+                // Thay vì N transactions riêng lẻ → M transactions (M = số user duy nhất)
+                $refundsByUser = []; // [user_id => [{order_id, amount, note}]]
+
                 foreach ($ordersToProcess as $processOrder) {
                     $remains      = (int) ($group['data']['remains'] ?? $processOrder->remains ?? 0);
                     $quantity     = (int) $processOrder->quantity;
                     $chargeAmount = (float) $processOrder->charge_amount;
 
                     if ($isFailed) {
-                        // Hoàn toàn bộ
                         $refundAmount = $chargeAmount;
                         $note = "Hoàn tiền đơn hàng #{$processOrder->id} thất bại";
                     } elseif ($isPartial) {
-                        // Hoàn theo tỉ lệ: remains / quantity * charge_amount
-                        if ($quantity > 0 && $remains > 0 && $chargeAmount > 0) {
-                            $refundAmount = round(($remains / $quantity) * $chargeAmount, 2);
-                        } else {
-                            $refundAmount = 0;
-                        }
+                        $refundAmount = ($quantity > 0 && $remains > 0 && $chargeAmount > 0)
+                            ? round(($remains / $quantity) * $chargeAmount, 2)
+                            : 0;
                         $note = "Hoàn tiền một phần đơn hàng #{$processOrder->id} (còn lại: {$remains}/{$quantity})";
                     } else {
                         $refundAmount = 0;
@@ -520,29 +573,45 @@ class PlaceOrder extends Command
                     }
 
                     if ($refundAmount > 0) {
-                        DB::beginTransaction();
-                        try {
-                            $user = User::lockForUpdate()->find($processOrder->user_id);
-                            if ($user) {
-                                Order::where('id', $processOrder->id)->update(['refund_amount' => $refundAmount]);
-                                Dongtien::createTransaction(
-                                    $user,
-                                    $refundAmount,
-                                    Dongtien::TYPE_REFUND,
-                                    $note,
-                                    ['order_id' => $processOrder->id]
-                                );
-                                $this->info("  Order #{$processOrder->id}: Hoàn tiền {$refundAmount} cho user #{$user->id} ({$newStatus})");
-                            }
-                            DB::commit();
-                        } catch (\Exception $e) {
+                        $refundsByUser[$processOrder->user_id][] = [
+                            'order_id' => $processOrder->id,
+                            'amount'   => $refundAmount,
+                            'note'     => $note,
+                        ];
+                    }
+                }
+
+                // 1 transaction per user, gộp toàn bộ đơn của user đó
+                foreach ($refundsByUser as $userId => $refunds) {
+                    DB::beginTransaction();
+                    try {
+                        $user = User::lockForUpdate()->find($userId);
+                        if (!$user) {
                             DB::rollBack();
-                            Log::error('Error refunding order (bulk status)', [
-                                'order_id' => $processOrder->id,
-                                'status'   => $newStatus,
-                                'error'    => $e->getMessage(),
-                            ]);
+                            continue;
                         }
+
+                        foreach ($refunds as $refund) {
+                            Order::where('id', $refund['order_id'])->update(['refund_amount' => $refund['amount']]);
+                            Dongtien::createTransaction(
+                                $user,
+                                $refund['amount'],
+                                Dongtien::TYPE_REFUND,
+                                $refund['note'],
+                                ['order_id' => $refund['order_id']]
+                            );
+                            $this->info("  Order #{$refund['order_id']}: Hoàn {$refund['amount']} cho user #{$userId} ({$newStatus})");
+                        }
+
+                        DB::commit();
+                    } catch (\Exception $e) {
+                        DB::rollBack();
+                        Log::error('Error refunding orders (bulk status)', [
+                            'user_id'   => $userId,
+                            'order_ids' => array_column($refunds, 'order_id'),
+                            'status'    => $newStatus,
+                            'error'     => $e->getMessage(),
+                        ]);
                     }
                 }
 

@@ -26,27 +26,19 @@ abstract class BaseProvider implements ProviderInterface
         $body = $this->buildAddOrderBody($service, $validated);
 
 
-        Log::info('Provider API Request', [
-            'provider'  => $this->provider->code,
-            'url'       => $url,
-            'body'      => $body,
-            'form_encoded' => http_build_query($body),
+        Log::debug('Provider API Request', [
+            'provider' => $this->provider->code,
+            'url'      => $url,
+            'body'     => $body,
         ]);
-
-        // Debug: log comments trực tiếp để xem giá trị thực
-        if (isset($body['comments'])) {
-            Log::info('Comments debug: ' . $body['comments']);
-        }
 
         try {
             $response = Http::timeout(30)->asForm()->post($url, $body);
 
-            // Log raw response trước khi parse
-            Log::info('Provider API Raw Response', [
-                'provider'      => $this->provider->code,
-                'status_code'   => $response->status(),
-                'headers'       => $response->headers(),
-                'raw_body'      => $response->body(),
+            Log::debug('Provider API Raw Response', [
+                'provider'    => $this->provider->code,
+                'status_code' => $response->status(),
+                'raw_body'    => $response->body(),
             ]);
 
             $result = [
@@ -150,10 +142,10 @@ abstract class BaseProvider implements ProviderInterface
         $body = $this->buildCancelBody($orderIds);
 
         try {
-            Log::info('Provider Cancel Order Request', [
-                'provider'  => $this->provider->code,
-                'url'       => $url,
-                'body'      => $body,
+            Log::debug('Provider Cancel Order Request', [
+                'provider' => $this->provider->code,
+                'url'      => $url,
+                'body'     => $body,
             ]);
 
             // Luôn dùng POST method

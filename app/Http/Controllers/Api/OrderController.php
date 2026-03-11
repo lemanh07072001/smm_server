@@ -351,6 +351,9 @@ class OrderController extends Controller
                     'link'         => $order->link,
                 ]);
 
+            // Push thẳng vào Redis queue, không chờ scan (giảm latency ~1 phút → ~100ms)
+            $this->pushOrderToQueue($order);
+
             return response()->json([
                 'message' => 'Tạo đơn hàng thành công.',
                 'data' => [
@@ -606,6 +609,29 @@ class OrderController extends Controller
             'message' => $message,
             'status' => 'FAILED',
         ], $statusCode);
+    }
+
+    /**
+     * Push order vào Redis queue ngay sau khi tạo.
+     * scan() chỉ còn là fallback recovery cho order bị sót.
+     */
+    private function pushOrderToQueue(Order $order): void
+    {
+        try {
+            $orderData = json_encode(['id' => $order->id]);
+            if ($order->is_priority == Order::PRIORITY[0]) {
+                \App\Helpers\RedisHelper::lpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, $orderData);
+            } else {
+                \App\Helpers\RedisHelper::rpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, $orderData);
+            }
+            OrderActivityLogger::for($order->id)->user($order->user_id)->orderQueued();
+        } catch (\Exception $e) {
+            // Silent fail - scan() sẽ recovery sau
+            Log::warning('OrderController: failed to push order to queue', [
+                'order_id' => $order->id,
+                'error'    => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
