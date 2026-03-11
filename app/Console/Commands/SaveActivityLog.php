@@ -16,7 +16,7 @@ class SaveActivityLog extends Command
      *
      * @var string
      */
-    protected $signature = 'activity_log:save';
+    protected $signature = 'activity_log:save {--timeout=55 : Số giây tối đa chạy trước khi thoát (mặc định 55s để không overlap với schedule 1 phút)}';
 
     /**
      * The console command description.
@@ -36,8 +36,15 @@ class SaveActivityLog extends Command
         $batchSize = 100; // Số lượng logs xử lý mỗi batch
         $totalSaved = 0;
         $totalFailed = 0;
+        $timeout = (int) $this->option('timeout');
+        $startTime = time();
 
         while (true) {
+            // Thoát nếu vượt quá timeout
+            if ((time() - $startTime) >= $timeout) {
+                break;
+            }
+
             // Kiểm tra RAM usage
             $currentRamMb = memory_get_usage(true) / 1024 / 1024;
             if ($currentRamMb > $maxRamMb) {

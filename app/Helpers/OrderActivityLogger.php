@@ -3,6 +3,7 @@
 namespace App\Helpers;
 
 use App\Models\OrderActivityLog;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 
 class OrderActivityLogger
@@ -287,7 +288,12 @@ class OrderActivityLogger
             Redis::connection(RedisHelper::REDIS_ACTIVITY_LOGS)
                 ->lpush(self::KEY_REDIS_ACTIVITY_LOGS, json_encode($logData));
         } catch (\Exception $e) {
-            // Silent fail - không làm crash flow chính
+            // Silent fail - không làm crash flow chính, nhưng ghi lại lỗi
+            Log::warning('OrderActivityLogger: failed to push log to Redis', [
+                'order_id' => $this->orderId,
+                'type'     => $type,
+                'error'    => $e->getMessage(),
+            ]);
         }
     }
 }

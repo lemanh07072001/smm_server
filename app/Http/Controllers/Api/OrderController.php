@@ -332,21 +332,24 @@ class OrderController extends Controller
 
             DB::commit();
 
-            // Ghi log activity cho reseller (role = 2)
-            if ($user->role === \App\Models\User::ROLE_RESELLER) {
-                OrderActivityLogger::for($order->id)
-                    ->user($user->id)
-                    ->orderCreated([
-                        'role'         => 'reseller',
-                        'service_id'   => $order->service_id,
-                        'service_name' => $service->name,
-                        'quantity'     => $quantity,
-                        'sell_rate'    => $sellRate,
-                        'agent_price'  => $service->agent_price,
-                        'charge_amount'=> $chargeAmount,
-                        'link'         => $order->link,
-                    ]);
-            }
+            // Ghi log activity cho tất cả roles
+            $roleLabel = match ($user->role) {
+                \App\Models\User::ROLE_ADMIN       => 'admin',
+                \App\Models\User::ROLE_SUPER_ADMIN => 'super_admin',
+                \App\Models\User::ROLE_RESELLER    => 'reseller',
+                default                            => 'user',
+            };
+            OrderActivityLogger::for($order->id)
+                ->user($user->id)
+                ->orderCreated([
+                    'role'         => $roleLabel,
+                    'service_id'   => $order->service_id,
+                    'service_name' => $service->name,
+                    'quantity'     => $quantity,
+                    'sell_rate'    => $sellRate,
+                    'charge_amount'=> $chargeAmount,
+                    'link'         => $order->link,
+                ]);
 
             return response()->json([
                 'message' => 'Tạo đơn hàng thành công.',
@@ -608,8 +611,19 @@ class OrderController extends Controller
     /**
      * Lấy activity logs của order từ MongoDB
      */
-    public function getOrderLogs(int $orderId): JsonResponse
+    public function getOrderLogs(Request $request, int $orderId): JsonResponse
     {
+        $user = $request->user();
+
+        $order = Order::find($orderId);
+        if (!$order) {
+            return $this->errorResponse('Đơn hàng không tồn tại.', 404);
+        }
+
+        if (!$user->isAdmin() && $order->user_id !== $user->id) {
+            return $this->errorResponse('Bạn không có quyền xem log đơn hàng này.', 403);
+        }
+
         $logs = OrderActivityLog::getByOrderId($orderId);
 
         return response()->json([

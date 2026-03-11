@@ -70,7 +70,12 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/user-financial-report.log'));
 
-
+        // Lưu activity logs từ Redis vào MongoDB mỗi 1 phút
+        $schedule->command('activity_log:save')
+            ->runInBackground()
+            ->everyMinute()
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/activity-log-save.log'));
     }
 
     /**
