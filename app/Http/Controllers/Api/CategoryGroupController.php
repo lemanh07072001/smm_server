@@ -167,12 +167,13 @@ class CategoryGroupController extends Controller
         $data = CategoryGroup::where('is_active', 1)
             ->orderBy('sort_order', 'asc')
             ->orderBy('name', 'asc')
-            ->get(['id', 'name', 'slug', 'image'])
+            ->get(['id', 'name', 'slug', 'image', 'is_active'])
             ->map(fn($item) => [
                 'id'        => $item->id,
                 'name'      => $item->name,
                 'slug'      => $item->slug,
                 'image'     => $item->image_url,
+                'is_active' => $item->is_active,
             ]);
 
         return response()->json(['data' => $data]);
