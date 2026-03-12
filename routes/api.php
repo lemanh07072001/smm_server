@@ -51,6 +51,7 @@ Route::middleware('throttle:auth')->group(function () {
 Route::get('/categories/all', [CategoryController::class, 'all']);
 Route::get('/category-groups/all', [CategoryGroupController::class, 'all']);
 Route::get('/category-groups/get-all', [CategoryGroupController::class, 'getAll']);
+Route::get('/category-groups/list', [CategoryGroupController::class, 'list']);
 Route::get('/services/all', [ServiceController::class, 'all']);
 Route::get('/services/form-types', [ServiceController::class, 'formTypes']);
 Route::get('/services/platforms', [ServiceController::class, 'platforms']);

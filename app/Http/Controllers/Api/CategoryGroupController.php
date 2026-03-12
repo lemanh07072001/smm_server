@@ -161,4 +161,20 @@ class CategoryGroupController extends Controller
             'data' => $query->get(),
         ]);
     }
+
+    public function list(): JsonResponse
+    {
+        $data = CategoryGroup::where('is_active', 1)
+            ->orderBy('sort_order', 'asc')
+            ->orderBy('name', 'asc')
+            ->get(['id', 'name', 'slug', 'image'])
+            ->map(fn($item) => [
+                'id'        => $item->id,
+                'name'      => $item->name,
+                'slug'      => $item->slug,
+                'image'     => $item->image_url,
+            ]);
+
+        return response()->json(['data' => $data]);
+    }
 }
