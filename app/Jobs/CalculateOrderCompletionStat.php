@@ -49,12 +49,17 @@ class CalculateOrderCompletionStat implements ShouldQueue
         );
 
         // Tính lại AVG 10 đơn gần nhất của dịch vụ này → cache vào bảng services
-        $avg = OrderCompletionStat::where('service_id', $order->service_id)
-            ->where('quantity', '>=', 1)
-            ->where('quantity', '<=', 1000)
-            ->orderBy('completed_at', 'desc')
-            ->limit(10)
-            ->avg('completion_minutes');
+        $avg = OrderCompletionStat::query()
+            ->selectRaw('AVG(completion_minutes) as avg_minutes')
+            ->fromSub(
+                OrderCompletionStat::where('service_id', $order->service_id)
+                    ->whereBetween('quantity', [1, 1000])
+                    ->orderBy('completed_at', 'desc')
+                    ->limit(10)
+                    ->select('completion_minutes'),
+                'recent'
+            )
+            ->value('avg_minutes');
 
         Service::where('id', $order->service_id)
             ->update(['avg_completion_minutes' => $avg ? (int) round($avg) : null]);

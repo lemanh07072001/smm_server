@@ -541,10 +541,29 @@ class PlaceOrder extends Command
                     ? Order::whereIn('id', $group['ids'])->get()
                     : collect();
 
+                $isCompleted = $newStatus === Order::STATUS_COMPLETED;
+
                 if ($isFailed) {
                     Order::whereIn('id', $group['ids'])->update(
                         array_merge($group['data'], ['refund_amount' => DB::raw('charge_amount')])
                     );
+                } elseif ($isCompleted) {
+                    // Chỉ lấy các order chưa có completed_at (lần đầu hoàn thành)
+                    $justCompletedIds = Order::whereIn('id', $group['ids'])
+                        ->whereNull('completed_at')
+                        ->pluck('id')
+                        ->all();
+
+                    Order::whereIn('id', $group['ids'])
+                        ->whereNull('completed_at')
+                        ->update(array_merge($group['data'], ['completed_at' => now()]));
+
+                    // Dispatch job thống kê chỉ cho các order vừa mới hoàn thành lần đầu
+                    if (!empty($justCompletedIds)) {
+                        Order::whereIn('id', $justCompletedIds)
+                            ->whereBetween('quantity', [1, 1000])
+                            ->each(fn($o) => \App\Jobs\CalculateOrderCompletionStat::dispatch($o));
+                    }
                 } else {
                     Order::whereIn('id', $group['ids'])->update($group['data']);
                 }
