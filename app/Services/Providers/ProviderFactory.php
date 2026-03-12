@@ -15,6 +15,7 @@ class ProviderFactory
         'smm'                => SmmProvider::class,
         '1kview'             => OneKViewProvider::class,
         'smmzone'            => SmmZoneProvider::class,
+        'smmapir'            => SmmApirProvider::class,
         // Thêm provider mới ở đây:
         // 'another_provider' => AnotherProvider::class,
     ];
