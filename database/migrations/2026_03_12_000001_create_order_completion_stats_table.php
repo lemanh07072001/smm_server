@@ -17,8 +17,6 @@ return new class extends Migration
             $table->timestamp('completed_at');
             $table->timestamps();
 
-            $table->foreign('order_id')->references('id')->on('orders')->onDelete('cascade');
-            $table->foreign('service_id')->references('id')->on('services')->onDelete('cascade');
             $table->index('completed_at');
             $table->index('quantity');
             $table->index('service_id');
