@@ -20,9 +20,12 @@ class OrderObserver
      */
     public function updated(Order $order): void
     {
-        // Khi status vừa chuyển sang completed, đẩy job vào queue
-        if ($order->isDirty('status') && $order->status === Order::STATUS_COMPLETED) {
-            CalculateOrderCompletionStat::dispatch($order);
+        // Khi status vừa chuyển sang completed, set completed_at và đẩy job vào queue
+        if ($order->wasChanged('status') && $order->status === Order::STATUS_COMPLETED) {
+            if (!$order->completed_at) {
+                $order->updateQuietly(['completed_at' => now()]);
+            }
+            CalculateOrderCompletionStat::dispatch($order->fresh());
         }
     }
 
