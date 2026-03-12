@@ -49,7 +49,7 @@ class Service extends Model
                 'fb_reaction'           => 'Cảm xúc Facebook',
                 'fb_follow'             => 'Follow Facebook',
                 'fb_like_page'          => 'Like page Facebook',
-                'fb_join_group'         => 'Join group Facebook',
+                'fb_join_group'         => 'Tăng member nhóm',
                 'fb_review'             => 'Review Facebook',
                 'fb_like_cmt'           => 'Like comment Facebook',
                 'fb_share'              => 'Share Facebook',
