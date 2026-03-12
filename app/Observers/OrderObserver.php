@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Jobs\CalculateOrderCompletionStat;
 use App\Models\Order;
 
 class OrderObserver
@@ -19,7 +20,10 @@ class OrderObserver
      */
     public function updated(Order $order): void
     {
-        //
+        // Khi status vừa chuyển sang completed, đẩy job vào queue
+        if ($order->isDirty('status') && $order->status === Order::STATUS_COMPLETED) {
+            CalculateOrderCompletionStat::dispatch($order);
+        }
     }
 
     /**

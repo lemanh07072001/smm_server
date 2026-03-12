@@ -65,6 +65,7 @@ Route::get('/settings/public', [SettingController::class, 'publicIndex']);
 Route::get('/statistics/summary', [StatisticsController::class, 'summary']);
 Route::get('/statistics/revenue', [StatisticsController::class, 'revenue']);
 Route::get('/statistics/daily-breakdown', [StatisticsController::class, 'dailyBreakdown']);
+Route::get('/statistics/order-completion-time', [StatisticsController::class, 'orderCompletionTime']);
 
 // Public Notifications API
 Route::get('/notifications', [NotificationController::class, 'index']);

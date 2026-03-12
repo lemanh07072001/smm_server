@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\OrderCompletionStat;
 use App\Models\ReportOrderDaily;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -267,6 +268,78 @@ class StatisticsController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Thống kê thời gian hoàn thành đơn hàng
+     * Lấy 10 đơn gần nhất có quantity từ 1-1000, tính thời gian trung bình
+     */
+    public function orderCompletionTime(Request $request)
+    {
+        try {
+            $query = OrderCompletionStat::where('quantity', '>=', 1)
+                ->where('quantity', '<=', 1000);
+
+            if ($request->filled('service_id')) {
+                $query->where('service_id', $request->integer('service_id'));
+            }
+
+            $stats = $query->orderBy('completed_at', 'desc')->limit(10)->get();
+
+            $count = $stats->count();
+
+            if ($count === 0) {
+                return response()->json([
+                    'data' => [
+                        'avg_completion_minutes' => null,
+                        'avg_completion_text'    => null,
+                        'based_on'               => 0,
+                        'samples'                => [],
+                    ],
+                    'message' => 'Chưa có dữ liệu'
+                ]);
+            }
+
+            $avgMinutes = (int) round($stats->avg('completion_minutes'));
+
+            return response()->json([
+                'data' => [
+                    'avg_completion_minutes' => $avgMinutes,
+                    'avg_completion_text'    => $this->formatMinutes($avgMinutes),
+                    'based_on'               => $count,
+                    'samples'                => $stats->map(fn($s) => [
+                        'order_id'           => $s->order_id,
+                        'quantity'           => $s->quantity,
+                        'completion_minutes' => $s->completion_minutes,
+                        'completion_text'    => $this->formatMinutes($s->completion_minutes),
+                        'completed_at'       => $s->completed_at?->toDateTimeString(),
+                    ]),
+                ],
+                'message' => 'Thống kê thời gian hoàn thành đơn hàng'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Lỗi khi lấy thống kê',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    private function formatMinutes(int $minutes): string
+    {
+        if ($minutes < 60) {
+            return "{$minutes} phút";
+        }
+
+        $hours = intdiv($minutes, 60);
+        $mins  = $minutes % 60;
+
+        if ($mins === 0) {
+            return "{$hours} giờ";
+        }
+
+        return "{$hours} giờ {$mins} phút";
     }
 
     /**
