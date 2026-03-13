@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\ProviderService;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\OrderCreationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,6 +17,8 @@ use Illuminate\Support\Facades\Log;
 
 class ApiOrderController extends Controller
 {
+    public function __construct(private OrderCreationService $orderService) {}
+
     /**
      * Dispatcher chính - phân loại action
      */
@@ -77,25 +80,77 @@ class ApiOrderController extends Controller
             return response()->json(['error' => 'Missing required fields: service, link, quantity'], 400);
         }
 
+        $links = array_values(array_filter(
+            array_map('trim', preg_split('/\\\\n|\r\n|\r|\n/', $link)),
+            fn($l) => $l !== ''
+        ));
+
+        $linksToCreate = count($links) > 1 ? $links : [$links[0] ?? $link];
+
+        $serviceResult = $this->validateApiService($serviceId);
+        if (isset($serviceResult['error'])) {
+            return response()->json($serviceResult['error'], $serviceResult['code']);
+        }
+        $service = $serviceResult['service'];
+
+        $qtyError = $this->orderService->validateQuantity($service, $quantity);
+        if ($qtyError) {
+            return response()->json(['error' => $qtyError['error']], $qtyError['code']);
+        }
+
+        $user    = $request->user();
+        $amounts = $this->orderService->calculateAmounts($service, $user, $quantity);
+        $total   = $amounts['chargeAmount'] * count($linksToCreate);
+
+        DB::beginTransaction();
+        try {
+            $user = User::where('id', $user->id)->lockForUpdate()->first();
+
+            if ($user->balance < $total) {
+                DB::rollBack();
+                return response()->json(['error' => 'Insufficient balance'], 400);
+            }
+
+            $orderIds = [];
+            foreach ($linksToCreate as $singleLink) {
+                $order = $this->orderService->createOrderRecord(
+                    $user, $service, $singleLink, $quantity,
+                    $amounts, 'api', 0, $request->input('comments')
+                );
+                $orderIds[] = $order->id;
+            }
+
+            DB::commit();
+
+            return count($orderIds) === 1
+                ? response()->json(['order' => $orderIds[0]])
+                : response()->json(['orders' => $orderIds]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('API addOrder error', ['error' => $e->getMessage(), 'user_id' => $user->id]);
+            return response()->json(['error' => 'Failed to create order'], 500);
+        }
+    }
+
+    /**
+     * Validate service cho API (thêm check api_accessible)
+     */
+    private function validateApiService(int $serviceId): array
+    {
         $service = Service::with(['providerService.provider'])
             ->where('id', $serviceId)
+            ->where('is_active', 1)
             ->first();
 
         if (!$service) {
-            return response()->json(['error' => 'Service not found'], 404);
+            return ['error' => ['error' => 'Service not found'], 'code' => 404];
         }
 
-        // Check is_active
-        if (!$service->is_active) {
-            return response()->json(['error' => 'Service is disabled'], 403);
-        }
-
-        // Check api_accessible
         if (!$service->api_accessible) {
-            return response()->json(['error' => 'This service is not available via API'], 403);
+            return ['error' => ['error' => 'This service is not available via API'], 'code' => 403];
         }
 
-        // Check service_status
         $blockedStatuses = [
             Service::SERVICE_STATUS_MAINTENANCE => 'Service is under maintenance, please try again later',
             Service::SERVICE_STATUS_SLOW        => 'Service is running slow, orders may be delayed',
@@ -103,78 +158,15 @@ class ApiOrderController extends Controller
             Service::SERVICE_STATUS_ERROR       => 'Service is currently having errors, please try again later',
         ];
         if (isset($blockedStatuses[$service->service_status])) {
-            return response()->json([
-                'error'        => $blockedStatuses[$service->service_status],
-                'status'       => $service->service_status,
-                'status_label' => Service::SERVICE_STATUSES[$service->service_status],
-            ], 422);
+            return ['error' => ['error' => $blockedStatuses[$service->service_status]], 'code' => 422];
         }
 
-        // Validate quantity
-        if ($quantity < $service->min_quantity) {
-            return response()->json(['error' => "Minimum quantity is {$service->min_quantity}"], 422);
-        }
-        if ($service->max_quantity && $quantity > $service->max_quantity) {
-            return response()->json(['error' => "Maximum quantity is {$service->max_quantity}"], 422);
+        $provider = $service->providerService->provider ?? null;
+        if (!$provider || !$provider->is_active) {
+            return ['error' => ['error' => 'Provider is unavailable'], 'code' => 422];
         }
 
-        $user = $request->user();
-
-        $costRate     = $service->providerService->cost_rate;
-        $sellRate     = $service->getPriceForUser($user);
-        $chargeAmount = $sellRate * $quantity;
-        $costAmount   = $costRate * $quantity;
-        $profitAmount = $chargeAmount - $costAmount;
-
-        DB::beginTransaction();
-        try {
-            $user = User::where('id', $user->id)->lockForUpdate()->first();
-
-            if ($user->balance < $chargeAmount) {
-                DB::rollBack();
-                return response()->json(['error' => 'Insufficient balance'], 400);
-            }
-
-            $order = Order::create([
-                'user_id'            => $user->id,
-                'order_source'       => 'api',
-                'service_id'         => $service->id,
-                'provider_service_id'=> $service->provider_service_id,
-                'link'               => $link,
-                'quantity'           => $quantity,
-                'comments'           => $request->input('comments'),
-                'status'             => Order::STATUS_PENDING,
-                'is_priority'        => $service->priority ?? 1,
-                'cost_rate'          => $costRate,
-                'sell_rate'          => $sellRate,
-                'charge_amount'      => $chargeAmount,
-                'cost_amount'        => $costAmount,
-                'profit_amount'      => $profitAmount,
-                'refund_amount'      => 0,
-                'final_charge'       => 0,
-                'final_cost'         => 0,
-                'final_profit'       => 0,
-                'is_finalized'       => false,
-                'livestream_duration'=> 0,
-            ]);
-
-            Dongtien::createTransaction(
-                $user,
-                $chargeAmount,
-                Dongtien::TYPE_CHARGE,
-                "API - Mua dịch vụ #{$service->id} - {$service->name}",
-                ['order_id' => $order->id, 'via' => 'api']
-            );
-
-            DB::commit();
-
-            return response()->json(['order' => $order->id]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('API addOrder error', ['error' => $e->getMessage(), 'user_id' => $user->id]);
-            return response()->json(['error' => 'Failed to create order'], 500);
-        }
+        return ['service' => $service];
     }
 
     /**

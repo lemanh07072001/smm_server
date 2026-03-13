@@ -16,10 +16,13 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Controller;
+use App\Services\OrderCreationService;
 use App\Services\Providers\ProviderFactory;
 
 class OrderController extends Controller
 {
+    public function __construct(private OrderCreationService $orderService) {}
+
     /**
      * Display a listing of orders.
      */
@@ -171,210 +174,91 @@ class OrderController extends Controller
 
     public function addOrder(Request $request): JsonResponse
     {
-        // Validate request
         $validated = $request->validate([
-            'service_id' => ['required', 'integer', 'exists:services,id'],
+            'service_id'          => ['required', 'integer', 'exists:services,id'],
             'provider_service_id' => ['required', 'integer', 'exists:provider_services,id'],
-            'link' => ['required', 'string', 'max:1000'],
-            'quantity' => ['required', 'integer', 'min:1', 'max:10000000'],
-            'reactions' => ['nullable', 'array'],
-            'comments' => ['nullable', 'string', 'max:5000'],
+            'link'                => ['required', 'string', 'max:50000'],
+            'quantity'            => ['required', 'integer', 'min:1', 'max:10000000'],
+            'reactions'           => ['nullable', 'array'],
+            'comments'            => ['nullable', 'string', 'max:5000'],
             'livestream_duration' => ['nullable', 'integer', 'min:1', 'max:1440'],
-            'internal_note' => ['nullable', 'string', 'max:1000'],
+            'internal_note'       => ['nullable', 'string', 'max:1000'],
         ]);
 
-        // Convert newline thực thành literal \n để lưu DB
         if (!empty($validated['comments'])) {
             $validated['comments'] = str_replace(["\r\n", "\r", "\n"], '\n', $validated['comments']);
         }
 
-        // Lấy user từ authenticated request
+        $links = array_values(array_filter(
+            array_map('trim', preg_split('/\\\\n|\r\n|\r|\n/', $validated['link'])),
+            fn($l) => $l !== ''
+        ));
+
+        if (count($links) > 1) {
+            return $this->addMultipleOrders($request, $validated, $links);
+        }
+
+        $validated['link'] = $links[0] ?? $validated['link'];
+
         $user = $request->user();
 
-        // Lấy Service với ProviderService và Provider (nested relationship)
-        $service = Service::with(['providerService.provider'])
-            ->where('id', $validated['service_id'])
-            ->where('provider_service_id', $validated['provider_service_id'])
-            ->where('is_active', 1)
-            ->first();
+        $result = $this->orderService->validateService($validated['service_id'], $validated['provider_service_id']);
+        if (isset($result['error'])) {
+            return response()->json(['message' => $result['error']], $result['code']);
+        }
+        $service = $result['service'];
 
-        if (!$service) {
-            return response()->json([
-                'message' => 'Service không tồn tại hoặc đã bị tắt.',
-            ], 404);
+        $qtyError = $this->orderService->validateQuantity($service, $validated['quantity']);
+        if ($qtyError) {
+            return response()->json(['message' => $qtyError['error']], $qtyError['code']);
         }
 
-        $blockedStatuses = [
-            Service::SERVICE_STATUS_MAINTENANCE => 'Dịch vụ đang bảo trì, vui lòng thử lại sau.',
-            Service::SERVICE_STATUS_STOPPED     => 'Dịch vụ đang tạm dừng, vui lòng thử lại sau.',
-            Service::SERVICE_STATUS_ERROR       => 'Dịch vụ đang lỗi, vui lòng thử lại sau.',
-        ];
-
-        if (isset($blockedStatuses[$service->service_status])) {
-            return response()->json([
-                'message' => $blockedStatuses[$service->service_status],
-            ], 422);
-        }
-
-        // Validate quantity theo giới hạn của service
-        $quantity = $validated['quantity'];
-        if ($quantity < $service->min_quantity) {
-            return response()->json([
-                'message' => "Số lượng tối thiểu là {$service->min_quantity}.",
-            ], 422);
-        }
-        if ($service->max_quantity && $quantity > $service->max_quantity) {
-            return response()->json([
-                'message' => "Số lượng tối đa là {$service->max_quantity}.",
-            ], 422);
-        }
-
-        // Lấy provider thông qua providerService
-        $provider = $service->providerService->provider;
-
-        if (!$provider) {
-            return response()->json([
-                'message' => 'Provider không tồn tại.',
-            ], 404);
-        }
-
-        if (!$provider->is_active) {
-            return response()->json([
-                'message' => 'Nhà cung cấp dịch vụ hiện không hoạt động.',
-            ], 422);
-        }
-
-        // Kiểm tra provider có được hỗ trợ không
-        if (!ProviderFactory::isSupported($provider->code)) {
-            return response()->json([
-                'message' => 'Provider không được hỗ trợ: ' . $provider->code,
-            ], 400);
-        }
-
-        // Tính toán số tiền
-        $costRate = $service->providerService->cost_rate;
-        $sellRate = $service->getPriceForUser($user);
         $livestreamDuration = $validated['livestream_duration'] ?? 0;
-
-        // Platform fb_view_livestream: tính theo công thức giá × thời gian × số mắt
-        if ($service->platform === 'fb_view_livestream') {
-            if (empty($livestreamDuration)) {
-                return response()->json([
-                    'message' => 'Vui lòng nhập thời gian livestream.',
-                ], 422);
-            }
-            $costAmount = $costRate * $livestreamDuration * $quantity;
-            $chargeAmount = $sellRate * $livestreamDuration * $quantity;
-        } else {
-            $costAmount = $costRate * $quantity;
-            $chargeAmount = $sellRate * $quantity;
+        if ($service->platform === 'fb_view_livestream' && empty($livestreamDuration)) {
+            return response()->json(['message' => 'Vui lòng nhập thời gian livestream.'], 422);
         }
 
-        $profitAmount = $chargeAmount - $costAmount;
+        $amounts = $this->orderService->calculateAmounts($service, $user, $validated['quantity'], $livestreamDuration);
 
         DB::beginTransaction();
         try {
-            // Lock user row để tránh race condition khi trừ tiền đồng thời
             $user = \App\Models\User::where('id', $user->id)->lockForUpdate()->first();
 
-            // Kiểm tra số dư bên trong transaction sau khi đã lock
-            if ($user->balance < $chargeAmount) {
+            if ($user->balance < $amounts['chargeAmount']) {
                 DB::rollBack();
                 return response()->json([
-                    'message' => 'Số dư không đủ để thực hiện đơn hàng.',
-                    'balance' => (float) $user->balance,
-                    'required' => (float) $chargeAmount,
-                    'shortage' => (float) ($chargeAmount - $user->balance),
+                    'message'  => 'Số dư không đủ để thực hiện đơn hàng.',
+                    'balance'  => (float) $user->balance,
+                    'required' => (float) $amounts['chargeAmount'],
+                    'shortage' => (float) ($amounts['chargeAmount'] - $user->balance),
                 ], 400);
             }
 
-            // Tạo internal_note tự động cho reseller, hoặc dùng note do user truyền vào
-            $internalNote = $validated['internal_note'] ?? null;
-            if ($user->role === \App\Models\User::ROLE_RESELLER && empty($internalNote)) {
-                $internalNote = "[Reseller] agent_price={$service->agent_price}, sell_rate={$sellRate}, charge={$chargeAmount}";
-            }
-
-            // Tạo order trong database với status pending
-            $order = Order::create([
-                'user_id' => $user->id,
-                'order_source' => 'web',
-                'service_id' => $validated['service_id'],
-                'provider_service_id' => $validated['provider_service_id'],
-                'link' => $validated['link'],
-                'quantity' => $quantity,
-                'livestream_duration' => $livestreamDuration ?: 0,
-                'comments' => $validated['comments'] ?? null,
-                'internal_note' => $internalNote,
-                'status' => Order::STATUS_PENDING,
-                'is_priority' => $service->priority ?? Order::PRIORITY[1],
-                'cost_rate' => $costRate,
-                'sell_rate' => $sellRate,
-                'charge_amount' => $chargeAmount,
-                'cost_amount' => $costAmount,
-                'profit_amount' => $profitAmount,
-                'refund_amount' => 0,
-                'final_charge' => 0,
-                'final_cost' => 0,
-                'final_profit' => 0,
-                'is_finalized' => false,
-            ]);
-
-            // Trừ tiền và ghi vào bảng dongtien
-            Dongtien::createTransaction(
-                $user,
-                $chargeAmount,
-                Dongtien::TYPE_CHARGE,
-                "Mua dịch vụ #{$service->id} - {$service->name}",
-                ['order_id' => $order->id]
+            $order = $this->orderService->createOrderRecord(
+                $user, $service, $validated['link'], $validated['quantity'],
+                $amounts, 'web', $livestreamDuration,
+                $validated['comments'] ?? null, $validated['internal_note'] ?? null
             );
-
-            // Load relationships
-            $order->load(['user', 'service', 'providerService.provider']);
 
             DB::commit();
 
-            // Ghi log activity cho tất cả roles
-            $roleLabel = match ($user->role) {
-                \App\Models\User::ROLE_ADMIN       => 'admin',
-                \App\Models\User::ROLE_SUPER_ADMIN => 'super_admin',
-                \App\Models\User::ROLE_RESELLER    => 'reseller',
-                default                            => 'user',
-            };
-            OrderActivityLogger::for($order->id)
-                ->user($user->id)
-                ->orderCreated([
-                    'role'         => $roleLabel,
-                    'service_id'   => $order->service_id,
-                    'service_name' => $service->name,
-                    'quantity'     => $quantity,
-                    'sell_rate'    => $sellRate,
-                    'charge_amount'=> $chargeAmount,
-                    'link'         => $order->link,
-                ]);
-
-            // Push thẳng vào Redis queue, không chờ scan (giảm latency ~1 phút → ~100ms)
-            $this->pushOrderToQueue($order);
+            $this->orderService->postCreateOrder($order, $user, $service, $amounts, $validated['quantity']);
 
             return response()->json([
                 'message' => 'Tạo đơn hàng thành công.',
-                'data' => [
-                    'order' => $order,
-                    'new_balance' => (float) $user->balance,
-                ],
+                'data'    => ['order' => $order, 'new_balance' => (float) $user->balance],
             ], 201);
 
         } catch (\Exception $e) {
             DB::rollBack();
-
             Log::error('Error creating order', [
-                'error' => $e->getMessage(),
-                'user_id' => $user->id,
+                'error'      => $e->getMessage(),
+                'user_id'    => $user->id,
                 'service_id' => $validated['service_id'],
             ]);
-
             return response()->json([
                 'message' => 'Lỗi khi tạo đơn hàng. Vui lòng thử lại.',
-                'error' => $e->getMessage(),
+                'error'   => $e->getMessage(),
             ], 500);
         }
     }
@@ -580,7 +464,7 @@ class OrderController extends Controller
             ]));
 
             if ($refundAmount > 0) {
-                $user = \App\Models\User::lockForUpdate()->find($order->user_id);
+                $user = \App\Models\User::where('id', $order->user_id)->lockForUpdate()->first();
                 if ($user) {
                     Dongtien::createTransaction(
                         $user,
@@ -613,25 +497,78 @@ class OrderController extends Controller
     }
 
     /**
-     * Push order vào Redis queue ngay sau khi tạo.
-     * scan() chỉ còn là fallback recovery cho order bị sót.
+     * Tạo nhiều order từ danh sách link (phân tách bằng \n)
      */
-    private function pushOrderToQueue(Order $order): void
+    private function addMultipleOrders(Request $request, array $validated, array $links): JsonResponse
     {
+        $user = $request->user();
+
+        $result = $this->orderService->validateService($validated['service_id'], $validated['provider_service_id']);
+        if (isset($result['error'])) {
+            return response()->json(['message' => $result['error']], $result['code']);
+        }
+        $service = $result['service'];
+
+        $quantity = $validated['quantity'];
+        $qtyError = $this->orderService->validateQuantity($service, $quantity);
+        if ($qtyError) {
+            return response()->json(['message' => $qtyError['error']], $qtyError['code']);
+        }
+
+        $livestreamDuration = $validated['livestream_duration'] ?? 0;
+        if ($service->platform === 'fb_view_livestream' && empty($livestreamDuration)) {
+            return response()->json(['message' => 'Vui lòng nhập thời gian livestream.'], 422);
+        }
+
+        $amounts      = $this->orderService->calculateAmounts($service, $user, $quantity, $livestreamDuration);
+        $totalCharge  = $amounts['chargeAmount'] * count($links);
+
+        DB::beginTransaction();
         try {
-            $orderData = json_encode(['id' => $order->id]);
-            if ($order->is_priority == Order::PRIORITY[0]) {
-                \App\Helpers\RedisHelper::lpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, $orderData);
-            } else {
-                \App\Helpers\RedisHelper::rpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, $orderData);
+            $user = \App\Models\User::where('id', $user->id)->lockForUpdate()->first();
+
+            if ($user->balance < $totalCharge) {
+                DB::rollBack();
+                return response()->json([
+                    'message'  => 'Số dư không đủ để thực hiện đơn hàng.',
+                    'balance'  => (float) $user->balance,
+                    'required' => (float) $totalCharge,
+                    'shortage' => (float) ($totalCharge - $user->balance),
+                ], 400);
             }
-            OrderActivityLogger::for($order->id)->user($order->user_id)->orderQueued();
+
+            $orders = [];
+            foreach ($links as $link) {
+                $orders[] = $this->orderService->createOrderRecord(
+                    $user, $service, $link, $quantity,
+                    $amounts, 'web', $livestreamDuration,
+                    $validated['comments'] ?? null, $validated['internal_note'] ?? null
+                );
+            }
+
+            DB::commit();
+
+            foreach ($orders as $order) {
+                $this->orderService->postCreateOrder($order, $user, $service, $amounts, $quantity);
+            }
+
+            return response()->json([
+                'message' => 'Tạo ' . count($orders) . ' đơn hàng thành công.',
+                'data'    => ['orders' => $orders, 'new_balance' => (float) $user->balance],
+            ], 201);
+
         } catch (\Exception $e) {
-            // Silent fail - scan() sẽ recovery sau
-            Log::warning('OrderController: failed to push order to queue', [
-                'order_id' => $order->id,
-                'error'    => $e->getMessage(),
+            DB::rollBack();
+            Log::error('Error creating multiple orders', [
+                'error'      => $e->getMessage(),
+                'user_id'    => $user->id,
+                'service_id' => $validated['service_id'],
+                'link_count' => count($links),
             ]);
+            return response()->json([
+                'message' => 'Lỗi khi tạo đơn hàng. Vui lòng thử lại.',
+                'error'   => $e->getMessage(),
+            ], 500);
         }
     }
 

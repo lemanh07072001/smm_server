@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateCategoryGroupRequest;
 use App\Models\CategoryGroup;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 class CategoryGroupController extends Controller
@@ -60,6 +61,7 @@ class CategoryGroupController extends Controller
         }
 
         $categoryGroup = CategoryGroup::create($data);
+        $this->clearCache();
 
         return response()->json([
             'message' => 'Tạo nhóm danh mục thành công.',
@@ -91,6 +93,7 @@ class CategoryGroupController extends Controller
         }
 
         $categoryGroup->update($data);
+        $this->clearCache();
 
         return response()->json([
             'message' => 'Cập nhật nhóm danh mục thành công.',
@@ -108,6 +111,7 @@ class CategoryGroupController extends Controller
         }
 
         $categoryGroup->delete();
+        $this->clearCache();
 
         return response()->json([
             'message' => 'Xóa nhóm danh mục thành công.',
@@ -122,6 +126,7 @@ class CategoryGroupController extends Controller
         ]);
 
         $count = CategoryGroup::whereIn('id', $request->ids)->delete();
+        $this->clearCache();
 
         return response()->json([
             'message' => "Đã xóa {$count} nhóm danh mục thành công.",
@@ -130,52 +135,62 @@ class CategoryGroupController extends Controller
 
     public function all(Request $request): JsonResponse
     {
-        $query = CategoryGroup::where('is_active', 1)
-            ->orderBy('sort_order', 'asc')
-            ->orderBy('name', 'asc')
-            ->with(['services' => function ($q) {
-                $q->where('is_active', 1)
-                    ->orderBy('sort_order', 'asc')
-                    ->orderBy('name', 'asc')
-                    ->with('providerService');
-            }]);
+        $data = Cache::remember('category_groups_all', 3600, function () {
+            return CategoryGroup::where('is_active', 1)
+                ->orderBy('sort_order', 'asc')
+                ->orderBy('name', 'asc')
+                ->with(['services' => function ($q) {
+                    $q->where('is_active', 1)
+                        ->orderBy('sort_order', 'asc')
+                        ->orderBy('name', 'asc')
+                        ->with('providerService');
+                }])
+                ->get();
+        });
 
-        return response()->json([
-            'data' => $query->get(),
-        ]);
+        return response()->json(['data' => $data]);
     }
 
     public function getAll(Request $request): JsonResponse
     {
-        $query = CategoryGroup::where('is_active', 1)
-            ->orderBy('sort_order', 'asc')
-            ->orderBy('name', 'asc')
-            ->with(['services' => function ($q) {
-                $q->where('is_active', 1)
-                    ->orderBy('sort_order', 'asc')
-                    ->orderBy('name', 'asc')
-                    ->with('providerService');
-            }]);
+        $data = Cache::remember('category_groups_all', 3600, function () {
+            return CategoryGroup::where('is_active', 1)
+                ->orderBy('sort_order', 'asc')
+                ->orderBy('name', 'asc')
+                ->with(['services' => function ($q) {
+                    $q->where('is_active', 1)
+                        ->orderBy('sort_order', 'asc')
+                        ->orderBy('name', 'asc')
+                        ->with('providerService');
+                }])
+                ->get();
+        });
 
-        return response()->json([
-            'data' => $query->get(),
-        ]);
+        return response()->json(['data' => $data]);
     }
 
     public function list(): JsonResponse
     {
-        $data = CategoryGroup::where('is_active', 1)
-            ->orderBy('sort_order', 'asc')
-            ->orderBy('name', 'asc')
-            ->get(['id', 'name', 'slug', 'image', 'is_active'])
-            ->map(fn($item) => [
-                'id'        => $item->id,
-                'name'      => $item->name,
-                'slug'      => $item->slug,
-                'image'     => $item->image_url,
-                'is_active' => $item->is_active,
-            ]);
+        $data = Cache::remember('category_groups_list', 3600, function () {
+            return CategoryGroup::where('is_active', 1)
+                ->orderBy('sort_order', 'asc')
+                ->orderBy('name', 'asc')
+                ->get(['id', 'name', 'slug', 'image', 'is_active'])
+                ->map(fn($item) => [
+                    'id'        => $item->id,
+                    'name'      => $item->name,
+                    'slug'      => $item->slug,
+                    'image'     => $item->image_url,
+                    'is_active' => $item->is_active,
+                ]);
+        });
 
         return response()->json(['data' => $data]);
+    }
+
+    private function clearCache(): void
+    {
+        Cache::forget('category_groups_all');
+        Cache::forget('category_groups_list');
     }
 }

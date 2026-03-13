@@ -77,10 +77,11 @@ class ProviderController extends Controller
     public function show(int $id): JsonResponse
     {
         $provider = Provider::findOrFail($id);
-        $provider->makeVisible('api_key');
 
         return response()->json([
-            'data' => $provider,
+            'data' => array_merge($provider->toArray(), [
+                'api_key' => $provider->getRawOriginal('api_key'),
+            ]),
         ]);
     }
 
@@ -105,7 +106,7 @@ class ProviderController extends Controller
         }
 
         $provider->update($data);
-        $provider->makeVisible('api_key');
+        $provider->refresh();
 
         // Clear services cache so provider is_active changes take effect immediately
         $cacheKeys = Cache::get('services_cache_keys', []);
@@ -116,7 +117,9 @@ class ProviderController extends Controller
 
         return response()->json([
             'message' => 'Cập nhật provider thành công.',
-            'data' => $provider,
+            'data' => array_merge($provider->toArray(), [
+                'api_key' => $provider->getRawOriginal('api_key'),
+            ]),
         ]);
     }
 
