@@ -38,9 +38,19 @@ class BuffViewerProvider extends BaseProvider
      * Build API URL mặc định (dùng cho getOrderStatus, canceledOrder, getBalance)
      * Các dịch vụ không thuộc group nào sẽ dùng endpoint này
      */
+    /**
+     * Lấy base URL gốc (bỏ /api/v2 nếu đã có trong api_url)
+     */
+    protected function getBaseUrl(): string
+    {
+        $url = rtrim($this->provider->api_url, '/');
+        // Strip /api/v2 nếu api_url trong DB đã chứa sẵn
+        return rtrim(preg_replace('#/api/v2$#', '', $url), '/');
+    }
+
     public function buildApiUrl(): string
     {
-        return rtrim($this->provider->api_url, '/') . '/api/v2';
+        return $this->getBaseUrl() . '/api/v2';
     }
 
     /**
@@ -48,7 +58,7 @@ class BuffViewerProvider extends BaseProvider
      */
     protected function buildApiUrlForService(Service $service): string
     {
-        $base = rtrim($this->provider->api_url, '/') . '/api/v2';
+        $base = $this->getBaseUrl() . '/api/v2';
         $groupId = $service->group_id ?? '';
         $suffix = $this->groupEndpointMap[$groupId] ?? null;
 
