@@ -32,21 +32,21 @@ class Kernel extends ConsoleKernel
         $schedule->command('order_place scan')
             ->runInBackground()
             ->everyMinute()
-            ->withoutOverlapping()
+            ->withoutOverlapping(5)
             ->appendOutputTo(storage_path('logs/place-order-scan.log'));
 
         // Kiểm tra trạng thái orders từ provider mỗi 1 phút
         $schedule->command('order_place status')
             ->runInBackground()
             ->everyMinute()
-            ->withoutOverlapping()
+            ->withoutOverlapping(5)
             ->appendOutputTo(storage_path('logs/place-order-status.log'));
 
         // Kiểm tra trạng thái orders đang chờ hoàn mỗi 1 phút
         $schedule->command('order_place refund-check')
             ->runInBackground()
             ->everyMinute()
-            ->withoutOverlapping()
+            ->withoutOverlapping(5)
             ->appendOutputTo(storage_path('logs/place-order-refund-check.log'));
 
         // Kiểm tra số dư nhà cung cấp mỗi 5 phút

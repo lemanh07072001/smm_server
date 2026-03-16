@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\UpdateSettingRequest;
+// UpdateSettingRequest removed — validate inline to avoid exists:settings,key constraint
 use App\Models\Setting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -91,19 +91,31 @@ class SettingController extends Controller
         ]);
     }
 
-    public function update(UpdateSettingRequest $request): JsonResponse
+    public function update(Request $request): JsonResponse
     {
-        $settings = $request->validated()['settings'];
+        $request->validate([
+            'settings'         => ['required', 'array', 'min:1'],
+            'settings.*.key'   => ['required', 'string', 'max:100'],
+            'settings.*.value' => ['nullable', 'string'],
+            'settings.*.group' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $settings = $request->input('settings');
 
         foreach ($settings as $item) {
-            Setting::where('key', $item['key'])->update(['value' => $item['value']]);
+            Setting::updateOrCreate(
+                ['key' => $item['key']],
+                [
+                    'value' => $item['value'] ?? null,
+                    'group' => $item['group'] ?? 'general',
+                ]
+            );
         }
 
         $this->clearCache();
 
         return response()->json([
             'message' => 'Cập nhật cài đặt thành công.',
-            'data' => Setting::all(),
         ]);
     }
 
