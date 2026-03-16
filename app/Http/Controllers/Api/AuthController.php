@@ -30,7 +30,11 @@ class AuthController extends Controller
         ];
 
         if ($request->ref) {
-            $userData['referred_by'] = $request->ref;
+            $refId = (int) $request->ref;
+            // Chỉ gán nếu referrer tồn tại và không phải là chính user mới này
+            if ($refId > 0 && User::where('id', $refId)->exists()) {
+                $userData['referred_by'] = $refId;
+            }
         }
 
         $user = User::create($userData);

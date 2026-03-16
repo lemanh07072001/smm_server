@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AffiliateCommission;
 use App\Models\BankAuto;
 use App\Models\User;
 use App\Models\Dongtien;
@@ -170,6 +171,8 @@ class DepositService
                 broadcast(new DepositSuccess($dongtien));
             }
 
+            $this->creditAffiliateCommission($user, $amount, $bankAuto->id);
+
             DB::commit();
 
             Log::info("{$source} deposit success", [
@@ -262,6 +265,8 @@ class DepositService
                 broadcast(new DepositSuccess($dongtien));
             }
 
+            $this->creditAffiliateCommission($user, $bankAuto->amount, $bankAuto->id);
+
             DB::commit();
 
             // Cleanup transaction code khỏi Redis/DB sau khi duyệt
@@ -299,6 +304,74 @@ class DepositService
         ]);
 
         return ['success' => true];
+    }
+
+    /**
+     * Cộng hoa hồng affiliate cho người giới thiệu khi deposit thành công.
+     * Gọi trong cùng transaction DB của processDeposit / approveDeposit.
+     */
+    private function creditAffiliateCommission(User $user, int $amount, int $bankAutoId): void
+    {
+        if (!$user->referred_by) {
+            return;
+        }
+
+        // Chặn self-referral: user không thể tự giới thiệu bản thân
+        if ($user->id === (int) $user->referred_by) {
+            Log::warning('Self-referral detected, skipping commission', ['user_id' => $user->id]);
+            return;
+        }
+
+        // Chặn double commission: mỗi deposit chỉ được cộng hoa hồng 1 lần
+        if (AffiliateCommission::where('deposit_id', $bankAutoId)->exists()) {
+            Log::warning('Affiliate commission already credited for deposit, skipping', [
+                'bank_auto_id' => $bankAutoId,
+                'user_id'      => $user->id,
+            ]);
+            return;
+        }
+
+        $referrer = User::find($user->referred_by);
+        if (!$referrer) {
+            return;
+        }
+
+        $commissionRate   = (float) ($referrer->affiliate_commission_rate ?? 10.00);
+        $commissionAmount = round($amount * $commissionRate / 100, 2);
+
+        if ($commissionAmount <= 0) {
+            return;
+        }
+
+        try {
+            AffiliateCommission::create([
+                'user_id'           => $referrer->id,
+                'referred_user_id'  => $user->id,
+                'order_id'          => null,
+                'deposit_id'        => $bankAutoId,
+                'source'            => 'deposit',
+                'order_amount'      => $amount,
+                'commission_rate'   => $commissionRate,
+                'commission_amount' => $commissionAmount,
+            ]);
+
+            $referrer->increment('affiliate_balance', $commissionAmount);
+
+            Log::info('Affiliate commission credited on deposit', [
+                'referrer_id'       => $referrer->id,
+                'referred_user_id'  => $user->id,
+                'deposit_amount'    => $amount,
+                'commission_amount' => $commissionAmount,
+                'bank_auto_id'      => $bankAutoId,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to credit affiliate commission', [
+                'referrer_id'  => $referrer->id,
+                'user_id'      => $user->id,
+                'bank_auto_id' => $bankAutoId,
+                'error'        => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

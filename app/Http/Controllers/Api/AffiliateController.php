@@ -9,6 +9,7 @@ use App\Models\Dongtien;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class AffiliateController extends Controller
@@ -19,22 +20,35 @@ class AffiliateController extends Controller
     public function dashboard(Request $request): JsonResponse
     {
         $user = $request->user();
+        $cacheKey = "affiliate_dashboard_{$user->id}";
 
-        $totalCommission = AffiliateCommission::where('user_id', $user->id)->sum('commission_amount');
-        $totalReferrals = User::where('referred_by', $user->id)->count();
-        $totalWithdrawn = AffiliateWithdrawal::where('user_id', $user->id)
-            ->where('status', AffiliateWithdrawal::STATUS_APPROVED)
-            ->sum('amount');
-        $pendingWithdrawal = AffiliateWithdrawal::where('user_id', $user->id)
-            ->where('status', AffiliateWithdrawal::STATUS_PENDING)
-            ->sum('amount');
+        $stats = Cache::remember($cacheKey, 60, function () use ($user) {
+            $commissionTotal = AffiliateCommission::where('user_id', $user->id)
+                ->sum('commission_amount');
+
+            $referralsCount = User::where('referred_by', $user->id)->count();
+
+            $withdrawalStats = AffiliateWithdrawal::where('user_id', $user->id)
+                ->selectRaw("
+                    SUM(CASE WHEN status = ? THEN amount ELSE 0 END) as total_withdrawn,
+                    SUM(CASE WHEN status = ? THEN amount ELSE 0 END) as pending_withdrawal
+                ", [AffiliateWithdrawal::STATUS_APPROVED, AffiliateWithdrawal::STATUS_PENDING])
+                ->first();
+
+            return [
+                'total_commission'  => (float) $commissionTotal,
+                'total_referrals'   => $referralsCount,
+                'total_withdrawn'   => (float) ($withdrawalStats->total_withdrawn ?? 0),
+                'pending_withdrawal' => (float) ($withdrawalStats->pending_withdrawal ?? 0),
+            ];
+        });
 
         return response()->json([
-            'affiliate_balance' => (float) $user->affiliate_balance,
-            'total_commission' => (float) $totalCommission,
-            'total_referrals' => $totalReferrals,
-            'total_withdrawn' => (float) $totalWithdrawn,
-            'pending_withdrawal' => (float) $pendingWithdrawal,
+            'affiliate_balance'  => (float) $user->affiliate_balance,
+            'total_commission'   => $stats['total_commission'],
+            'total_referrals'    => $stats['total_referrals'],
+            'total_withdrawn'    => $stats['total_withdrawn'],
+            'pending_withdrawal' => $stats['pending_withdrawal'],
         ]);
     }
 
@@ -125,6 +139,8 @@ class AffiliateController extends Controller
             'status' => AffiliateWithdrawal::STATUS_PENDING,
         ]);
 
+        Cache::forget("affiliate_dashboard_{$user->id}");
+
         return response()->json([
             'message' => 'Yêu cầu rút tiền đã được gửi, chờ admin duyệt.',
             'withdrawal' => $withdrawal,
@@ -208,21 +224,31 @@ class AffiliateController extends Controller
             return response()->json(['message' => 'Yêu cầu này đã được xử lý.'], 400);
         }
 
-        $user = User::find($withdrawal->user_id);
-        if (!$user) {
-            return response()->json(['message' => 'User không tồn tại.'], 404);
-        }
-
-        if ((float) $user->affiliate_balance < (float) $withdrawal->amount) {
-            return response()->json([
-                'message' => 'Số dư affiliate không đủ.',
-                'affiliate_balance' => (float) $user->affiliate_balance,
-                'withdrawal_amount' => (float) $withdrawal->amount,
-            ], 400);
-        }
-
         DB::beginTransaction();
         try {
+            // Lock withdrawal để tránh 2 admin duyệt cùng lúc
+            $withdrawal = AffiliateWithdrawal::lockForUpdate()->find($id);
+            if (!$withdrawal || !$withdrawal->isPending()) {
+                DB::rollBack();
+                return response()->json(['message' => 'Yêu cầu này đã được xử lý.'], 400);
+            }
+
+            // Lock user để tránh race condition khi trừ balance
+            $user = User::lockForUpdate()->find($withdrawal->user_id);
+            if (!$user) {
+                DB::rollBack();
+                return response()->json(['message' => 'User không tồn tại.'], 404);
+            }
+
+            if ((float) $user->affiliate_balance < (float) $withdrawal->amount) {
+                DB::rollBack();
+                return response()->json([
+                    'message' => 'Số dư affiliate không đủ.',
+                    'affiliate_balance' => (float) $user->affiliate_balance,
+                    'withdrawal_amount' => (float) $withdrawal->amount,
+                ], 400);
+            }
+
             // Trừ ví affiliate
             $user->decrement('affiliate_balance', $withdrawal->amount);
 
@@ -248,6 +274,8 @@ class AffiliateController extends Controller
             ]);
 
             DB::commit();
+
+            Cache::forget("affiliate_dashboard_{$user->id}");
 
             $user->refresh();
             return response()->json([
@@ -283,6 +311,8 @@ class AffiliateController extends Controller
             'processed_at' => now(),
             'processed_by' => $request->user()->id,
         ]);
+
+        Cache::forget("affiliate_dashboard_{$withdrawal->user_id}");
 
         return response()->json([
             'message' => 'Đã từ chối yêu cầu rút tiền.',

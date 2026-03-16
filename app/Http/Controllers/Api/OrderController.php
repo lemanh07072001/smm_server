@@ -68,22 +68,40 @@ class OrderController extends Controller
             $query->whereDate('created_at', '<=', $endDate);
         }
 
-        // Thống kê số lượng từng trạng thái (1 query nhẹ dùng index status)
-        $statusCountsRaw = Order::selectRaw('status, COUNT(*) as count')
+        // Thống kê số lượng từng trạng thái theo cùng filter (search/date), 1 query duy nhất
+        $countQuery = Order::query();
+        if ($search) {
+            $countQuery->where(function ($q) use ($search) {
+                $q->where('link', 'like', "%{$search}%")
+                  ->orWhere('provider_order_id', 'like', "%{$search}%")
+                  ->orWhere('id', $search);
+            });
+        }
+        if ($startDate) {
+            $countQuery->whereDate('created_at', '>=', $startDate);
+        }
+        if ($endDate) {
+            $countQuery->whereDate('created_at', '<=', $endDate);
+        }
+
+        $statusCountsRaw = (clone $countQuery)
+            ->selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
             ->pluck('count', 'status')
             ->toArray();
 
+        $allCount = array_sum($statusCountsRaw);
+
         $statusCounts = [
-            'all' => Order::count(),
-            'pending' => $statusCountsRaw['pending'] ?? 0,
-            'processing' => $statusCountsRaw['processing'] ?? 0,
+            'all'         => $allCount,
+            'pending'     => $statusCountsRaw['pending'] ?? 0,
+            'processing'  => $statusCountsRaw['processing'] ?? 0,
             'in_progress' => $statusCountsRaw['in_progress'] ?? 0,
-            'completed' => $statusCountsRaw['completed'] ?? 0,
-            'partial' => $statusCountsRaw['partial'] ?? 0,
-            'canceled' => $statusCountsRaw['canceled'] ?? 0,
-            'refunded' => $statusCountsRaw['refunded'] ?? 0,
-            'failed' => $statusCountsRaw['failed'] ?? 0,
+            'completed'   => $statusCountsRaw['completed'] ?? 0,
+            'partial'     => $statusCountsRaw['partial'] ?? 0,
+            'canceled'    => $statusCountsRaw['canceled'] ?? 0,
+            'refunded'    => $statusCountsRaw['refunded'] ?? 0,
+            'failed'      => $statusCountsRaw['failed'] ?? 0,
         ];
 
         // Phân trang - orderBy id nhanh hơn created_at

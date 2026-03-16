@@ -145,8 +145,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/user/{userId}', [OrderController::class, 'getOrdersByUser']);
     Route::get('/orders/{orderId}/logs', [OrderController::class, 'getOrderLogs']);
-    Route::post('/add-order', [OrderController::class, 'addOrder']);
-    Route::post('/orders/{orderId}/cancel', [OrderController::class, 'cancelOrder']);
+    Route::post('/add-order', [OrderController::class, 'addOrder'])->middleware('throttle:60,1');
+    Route::post('/orders/{orderId}/cancel', [OrderController::class, 'cancelOrder'])->middleware('throttle:30,1');
 
     // Code Transactions
     Route::post('/code-transactions', [CodeTransactionController::class, 'store']);
@@ -195,7 +195,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/affiliate/commissions', [AffiliateController::class, 'commissions']);
     Route::get('/affiliate/referrals', [AffiliateController::class, 'referrals']);
     Route::get('/affiliate/link', [AffiliateController::class, 'getLink']);
-    Route::post('/affiliate/withdraw', [AffiliateController::class, 'withdraw']);
+    Route::post('/affiliate/withdraw', [AffiliateController::class, 'withdraw'])->middleware('throttle:5,1');
     Route::get('/affiliate/withdrawals', [AffiliateController::class, 'withdrawals']);
 
     // Admin Affiliate

@@ -22,8 +22,12 @@ class BankAutoController extends Controller
      * Admin duyệt giao dịch pending_duplicate hoặc pending
      * POST /api/admin/bank-auto/{id}/approve
      */
-    public function approve(int $id): JsonResponse
+    public function approve(Request $request, int $id): JsonResponse
     {
+        if (!$request->user() || !$request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
         $bankAuto = BankAuto::find($id);
 
         if (!$bankAuto) {
@@ -36,7 +40,10 @@ class BankAutoController extends Controller
             return response()->json(['success' => false, 'message' => $result['message']], 400);
         }
 
-        Log::info('Admin approved deposit', ['bank_auto_id' => $id]);
+        Log::info('Admin approved deposit', [
+            'bank_auto_id' => $id,
+            'admin_id'     => $request->user()->id,
+        ]);
 
         return response()->json([
             'success'     => true,
@@ -49,8 +56,12 @@ class BankAutoController extends Controller
      * Admin từ chối giao dịch pending_duplicate hoặc pending
      * POST /api/admin/bank-auto/{id}/reject
      */
-    public function reject(int $id, Request $request): JsonResponse
+    public function reject(Request $request, int $id): JsonResponse
     {
+        if (!$request->user() || !$request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
         $bankAuto = BankAuto::find($id);
 
         if (!$bankAuto) {
@@ -63,7 +74,10 @@ class BankAutoController extends Controller
             return response()->json(['success' => false, 'message' => $result['message']], 400);
         }
 
-        Log::info('Admin rejected deposit', ['bank_auto_id' => $id]);
+        Log::info('Admin rejected deposit', [
+            'bank_auto_id' => $id,
+            'admin_id'     => $request->user()->id,
+        ]);
 
         return response()->json(['success' => true, 'message' => 'Đã từ chối giao dịch']);
     }

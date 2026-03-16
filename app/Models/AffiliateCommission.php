@@ -13,6 +13,8 @@ class AffiliateCommission extends Model
     protected $fillable = [
         'user_id',
         'order_id',
+        'deposit_id',
+        'source',
         'referred_user_id',
         'order_amount',
         'commission_rate',
