@@ -2,6 +2,7 @@
 
 namespace App\Services\Providers;
 
+use App\Models\Order;
 use App\Models\Service;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -188,6 +189,84 @@ class BuffViewerProvider extends BaseProvider
             'key'    => $this->provider->api_key,
             'action' => 'status',
             'order'  => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
+        ];
+    }
+
+    /**
+     * Override getOrderStatus: BuffViewer dùng endpoint khác nhau theo loại service.
+     * Query DB để tìm endpoint của từng order → gọi từng endpoint → merge kết quả.
+     */
+    public function getOrderStatus(string|array $orderIds): array
+    {
+        $ids = is_array($orderIds) ? $orderIds : [$orderIds];
+
+        // Tra DB: lấy group_id của service cho từng provider_order_id
+        $orders = Order::whereIn('provider_order_id', $ids)
+            ->with('service:id,group_id')
+            ->get(['id', 'provider_order_id', 'service_id']);
+
+        // Group order_id theo endpoint suffix
+        $endpointGroups = [];
+        foreach ($orders as $order) {
+            $groupId = $order->service->group_id ?? '';
+            $suffix  = $this->groupEndpointMap[$groupId] ?? null;
+
+            // Fallback: nếu chưa map, dùng tiktok-views (default)
+            $suffix = $suffix ?? 'tiktok-views';
+
+            $endpointGroups[$suffix][] = $order->provider_order_id;
+        }
+
+        // Nếu không tìm được order nào trong DB, fallback gọi endpoint đầu tiên trong map
+        if (empty($endpointGroups)) {
+            $defaultSuffix = array_values($this->groupEndpointMap)[0] ?? 'tiktok-views';
+            $endpointGroups[$defaultSuffix] = $ids;
+        }
+
+        // Gọi API từng endpoint và merge kết quả
+        $mergedData = [];
+        $lastSuccess = false;
+        $lastStatusCode = 0;
+
+        foreach ($endpointGroups as $suffix => $groupOrderIds) {
+            $url  = $this->getBaseUrl() . '/api/v2/' . $suffix;
+            $body = $this->buildStatusBody($groupOrderIds);
+
+            Log::debug('BuffViewer getOrderStatus', [
+                'url'       => $url,
+                'order_ids' => $groupOrderIds,
+            ]);
+
+            try {
+                $response = Http::timeout(10)->asForm()->post($url, $body);
+                $lastSuccess    = $response->successful();
+                $lastStatusCode = $response->status();
+                $data = $response->json() ?? [];
+
+                // Nếu là single order response (có key 'status' ở root)
+                if (count($groupOrderIds) === 1 && isset($data['status'])) {
+                    $mergedData[$groupOrderIds[0]] = $data;
+                } else {
+                    // Batch response: {"orderId": {...}, ...}
+                    foreach ($data as $oid => $odata) {
+                        $mergedData[$oid] = $odata;
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error('BuffViewer getOrderStatus Error', [
+                    'url'   => $url,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return [
+            'success'            => $lastSuccess,
+            'status_code'        => $lastStatusCode,
+            'body'               => json_encode($mergedData),
+            'data'               => $mergedData,
+            'request_order_id'   => is_array($orderIds) ? null : (string) $orderIds,
+            'request_order_ids'  => $ids,
         ];
     }
 
