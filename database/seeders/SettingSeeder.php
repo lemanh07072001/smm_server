@@ -54,10 +54,15 @@ class SettingSeeder extends Seeder
             ['key' => 'sidebar_videos',       'value' => null, 'group' => 'sidebar'],
 
             // Bank
-            ['key' => 'bank_name',           'value' => null, 'group' => 'bank'],
-            ['key' => 'bank_code',           'value' => null, 'group' => 'bank'],
-            ['key' => 'bank_account_number', 'value' => null, 'group' => 'bank'],
-            ['key' => 'bank_account_holder', 'value' => null, 'group' => 'bank'],
+            ['key' => 'bank_name',              'value' => null, 'group' => 'bank'],
+            ['key' => 'bank_code',              'value' => null, 'group' => 'bank'],
+            ['key' => 'bank_account_number',    'value' => null, 'group' => 'bank'],
+            ['key' => 'bank_account_holder',    'value' => null, 'group' => 'bank'],
+            ['key' => 'pay2s_token',            'value' => null, 'group' => 'bank'],
+
+            // Telegram
+            ['key' => 'telegram_bot_token',       'value' => null, 'group' => 'telegram'],
+            ['key' => 'telegram_chat_id_system',  'value' => null, 'group' => 'telegram'],
 
             // Social
             ['key' => 'social_zalo',     'value' => null, 'group' => 'social'],

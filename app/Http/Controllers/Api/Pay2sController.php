@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Setting;
 use App\Services\DepositService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,6 +41,19 @@ class Pay2sController extends Controller
      */
     public function webhook(Request $request): JsonResponse
     {
+        // Verify checksum nếu pay2s_token đã được cấu hình
+        $token = Setting::where('key', 'pay2s_token')->value('value');
+        if (!empty($token)) {
+            $payload = $request->getContent();
+            $checksum = hash_hmac('sha256', $payload, $token);
+            $provided = $request->header('x-api-key') ?? $request->header('authorization') ?? '';
+            $provided = ltrim($provided, 'Bearer ');
+            if (!hash_equals($checksum, $provided)) {
+                Log::warning('Pay2s webhook: invalid checksum', ['ip' => $request->ip()]);
+                return response()->json(['success' => false, 'message' => 'Invalid checksum'], 401);
+            }
+        }
+
         $payload = $request->all();
 
         Log::info('Pay2s webhook received', $payload);

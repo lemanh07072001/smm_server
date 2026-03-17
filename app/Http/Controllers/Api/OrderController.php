@@ -149,12 +149,13 @@ class OrderController extends Controller
             $query->where('status', $status);
         }
 
-        // Tìm kiếm theo link, provider_order_id, tên dịch vụ
+        // Tìm kiếm theo id, link, provider_order_id, tên dịch vụ
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('link', 'like', "%{$search}%")
                   ->orWhere('provider_order_id', 'like', "%{$search}%")
-                  ->orWhereHas('service', fn($s) => $s->where('name', 'like', "%{$search}%"));
+                  ->orWhereHas('service', fn($s) => $s->where('name', 'like', "%{$search}%"))
+                  ->orWhere('id', is_numeric($search) ? (int)$search : -1);
             });
         }
 
