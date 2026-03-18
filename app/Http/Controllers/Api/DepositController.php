@@ -142,6 +142,19 @@ class DepositController extends Controller
 
         $user = Auth::user();
 
+        $existing = BankAuto::where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->where('expires_at', '>', now())
+            ->whereNull('tid')
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'message' => 'Bạn đang có giao dịch chờ thanh toán. Vui lòng hủy trước khi tạo mới.',
+                'data'    => $existing,
+            ], 409);
+        }
+
         $deposit = BankAuto::create([
             'user_id'          => $user->id,
             'amount'           => $request->amount,

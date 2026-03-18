@@ -104,6 +104,50 @@ class BankAutoController extends Controller
     }
 
     /**
+     * Admin cộng tiền thủ công cho giao dịch pending/expired
+     * POST /api/admin/bank-auto/{id}/credit
+     */
+    public function credit(Request $request, int $id): JsonResponse
+    {
+        if (!$request->user() || !$request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $request->validate([
+            'tid'        => 'nullable|string|max:100',
+            'admin_note' => 'nullable|string|max:500',
+        ]);
+
+        $bankAuto = BankAuto::find($id);
+        if (!$bankAuto) {
+            return response()->json(['success' => false, 'message' => 'Không tìm thấy giao dịch'], 404);
+        }
+
+        $result = $this->depositService->creditDeposit(
+            $bankAuto,
+            $request->input('tid', ''),
+            $request->input('admin_note', 'Admin xác nhận đã nhận tiền'),
+            $request->user()->id
+        );
+
+        if (!$result['success']) {
+            return response()->json(['success' => false, 'message' => $result['message']], 400);
+        }
+
+        Log::info('Admin credited deposit manually', [
+            'bank_auto_id' => $id,
+            'admin_id'     => $request->user()->id,
+            'tid'          => $request->input('tid'),
+        ]);
+
+        return response()->json([
+            'success'     => true,
+            'message'     => 'Đã cộng tiền thành công',
+            'new_balance' => $result['new_balance'],
+        ]);
+    }
+
+    /**
      * Admin từ chối giao dịch pending_duplicate hoặc pending
      * POST /api/admin/bank-auto/{id}/reject
      */

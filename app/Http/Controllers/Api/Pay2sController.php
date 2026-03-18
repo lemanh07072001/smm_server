@@ -125,7 +125,7 @@ class Pay2sController extends Controller
         }
 
         // Bước 4: Tạo transaction ID nội bộ
-        $transactionId = 'P2S_' . $pay2sId;
+        $transactionId = (string) $pay2sId;
 
         // Bước 4.5: Dedup tầng 1 — kiểm tra is_processed trước khi xử lý
         // Dùng atomic UPDATE WHERE is_processed=false → trả về số rows affected

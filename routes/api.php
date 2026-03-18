@@ -209,6 +209,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/bank-auto/{id}/logs', [BankAutoController::class, 'logs']);
     Route::post('/admin/bank-auto/{id}/approve', [BankAutoController::class, 'approve']);
     Route::post('/admin/bank-auto/{id}/reject', [BankAutoController::class, 'reject']);
+    Route::post('/admin/bank-auto/{id}/credit', [BankAutoController::class, 'credit']);
 
 });
 
