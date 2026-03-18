@@ -166,12 +166,15 @@ class PlaceOrder extends Command
      */
     protected function handleScan()
     {
-        $this->info('Bắt đầu quét (fallback) orders STATUS_PENDING bị sót...');
+        $this->info('Bắt đầu quét orders STATUS_PENDING...');
 
-        // Chỉ lấy order cũ hơn 2 phút để tránh race với Controller vừa push xong
+        // priority=0 được Controller push ngay → cutoff 2 phút để tránh race
+        // order thường chỉ do scan push → không cần cutoff nhưng giữ chung cho đơn giản
         $cutoff = now()->subMinutes(2);
 
-        $orders = Order::where('status', Order::STATUS_PENDING)
+        // Chỉ SELECT 2 cột cần thiết, không load full model → giảm memory/bandwidth
+        $orders = Order::select(['id', 'is_priority'])
+            ->where('status', Order::STATUS_PENDING)
             ->whereNull('provider_order_id')
             ->where(function ($q) {
                 $q->whereNull('retry_count')
@@ -184,28 +187,25 @@ class PlaceOrder extends Command
         $pushed  = 0;
         $skipped = 0;
 
-        // Chunk để tránh load toàn bộ cursor vào RAM cùng lúc
-        $chunkBuffer = [];
-        $chunkSize   = 500;
-
         $flushChunk = function (array $chunk) use (&$pushed, &$skipped) {
-            // Batch check lock bằng Redis pipeline: 1 round-trip cho N keys
-            $lockKeys = array_map(
-                fn($o) => 'place_order_lock:order:' . $o->id,
-                $chunk
-            );
+            $count = count($chunk); // array_values() đã làm ở ngoài
 
-            $existsResults = Redis::pipeline(function ($pipe) use ($lockKeys) {
-                foreach ($lockKeys as $key) {
-                    $pipe->exists($key);
-                }
+            // mget 2 nhóm key trong 1 pipeline (EXISTS trả về 0/1, mget nhanh hơn với keys ngắn)
+            // Dùng EXISTS cho lock key (thường rất ít key tồn tại) và scan_queued (thường tồn tại nhiều)
+            $results = Redis::pipeline(function ($pipe) use ($chunk) {
+                foreach ($chunk as $o) { $pipe->exists('place_order_lock:order:' . $o->id); }
+                foreach ($chunk as $o) { $pipe->exists('scan_queued:order:' . $o->id); }
             });
+
+            $lockResults   = array_slice($results, 0, $count);
+            $queuedResults = array_slice($results, $count, $count);
 
             $priorityPush = [];
             $normalPush   = [];
+            $scanQueuedKeys = [];
 
             foreach ($chunk as $i => $order) {
-                if ($existsResults[$i]) {
+                if ($lockResults[$i] || $queuedResults[$i]) {
                     $skipped++;
                     continue;
                 }
@@ -215,30 +215,39 @@ class PlaceOrder extends Command
                 } else {
                     $normalPush[] = $orderData;
                 }
+                $scanQueuedKeys[] = 'scan_queued:order:' . $order->id;
                 $pushed++;
             }
 
-            // Batch push vào queue: 1 LPUSH / 1 RPUSH cho cả chunk
-            if (!empty($priorityPush)) {
-                Redis::lpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, ...$priorityPush);
-            }
-            if (!empty($normalPush)) {
-                Redis::rpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, ...$normalPush);
-            }
+            if (empty($scanQueuedKeys)) return;
+
+            // 1 pipeline: push queue + setex scan_queued (TTL 5 phút) cùng lúc
+            Redis::pipeline(function ($pipe) use ($priorityPush, $normalPush, $scanQueuedKeys) {
+                if (!empty($priorityPush)) {
+                    $pipe->lpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, ...$priorityPush);
+                }
+                if (!empty($normalPush)) {
+                    $pipe->rpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, ...$normalPush);
+                }
+                foreach ($scanQueuedKeys as $key) {
+                    $pipe->setex($key, 300, 1);
+                }
+            });
         };
+
+        $chunkBuffer = [];
+        $chunkSize   = 1000; // Tăng lên 1000: 2 pipeline x 1000 EXISTS/chunk, ít round-trips hơn
 
         foreach ($orders as $order) {
             $chunkBuffer[] = $order;
-
             if (count($chunkBuffer) >= $chunkSize) {
-                $flushChunk($chunkBuffer);
+                $flushChunk(array_values($chunkBuffer));
                 $chunkBuffer = [];
             }
         }
 
-        // Flush phần còn lại chưa đủ chunk
         if (!empty($chunkBuffer)) {
-            $flushChunk($chunkBuffer);
+            $flushChunk(array_values($chunkBuffer));
         }
 
         $this->info("Hoàn thành! Pushed: {$pushed}, Skipped (đang xử lý): {$skipped}");

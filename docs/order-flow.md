@@ -111,15 +111,39 @@ callProviderApi($order)
 **Mục đích:** Recovery cho các order bị sót (Redis lỗi lúc tạo, server restart, ...)
 
 ```
-Query DB: status=pending AND provider_order_id IS NULL
-          AND retry_count < 5
+Query DB (cursor streaming): SELECT id, is_priority   ← chỉ 2 cột, tiết kiệm memory
+          WHERE status=pending AND provider_order_id IS NULL
+          AND (retry_count IS NULL OR retry_count < RETRY_COUNT)
           AND created_at <= now() - 2 phút  ← tránh race với Controller
+          ORDER BY id ASC
+    ↓
+Chunk 1000 orders (array_values để index 0,1,2...)
+    ↓
+1 Redis pipeline: check lock + scan_queued cùng lúc (2000 EXISTS, 1 round-trip)
+    EXISTS place_order_lock:order:{id}   # x1000
+    EXISTS scan_queued:order:{id}        # x1000
     ↓
 Foreach order:
-    Kiểm tra place_order_lock:order:{id} còn tồn tại không
-        ↓ có → đang được xử lý, skip
-        ↓ không có → push vào queue (duplicate OK, add-priority sẽ kiểm tra DB)
+    lock || scan_queued → skip
+    is_priority=0 → priorityPush[] (lpush đầu queue, xử lý trước)
+    else           → normalPush[]  (rpush cuối queue, xử lý sau)
+    scanQueuedKeys[] = 'scan_queued:order:{id}'
+    ↓
+1 Redis pipeline: push queue + setex scan_queued cùng lúc
+    lpush KEY_PRIORITY_0 ...priorityPush
+    rpush KEY_PRIORITY_0 ...normalPush
+    setex scan_queued:order:{id} 300 1   # TTL 5 phút, mỗi key
 ```
+
+**scan_queued key (TTL 300s):** Đánh dấu order đã được push, tránh scan push trùng mỗi phút.
+
+**Tối ưu cho 1000+ orders:**
+| Thay đổi | Lý do |
+|---|---|
+| `SELECT id, is_priority` thay vì `SELECT *` | Giảm ~10x memory mỗi row cursor |
+| Chunk 1000 thay vì 500 | Giảm 50% số pipeline round-trips với Redis |
+| Track `$scanQueuedKeys` (string) thay vì `$toPushOrders` (object) | Nhẹ hơn trong memory |
+| `array_values()` ở ngoài closure | Tránh re-index thừa |
 
 > **Lưu ý:** `scan` không acquire lock. Lock chỉ được set bởi `add-priority` khi thực sự xử lý. Duplicate trong queue an toàn vì `add-priority` luôn kiểm tra lại DB trước khi gọi provider.
 
@@ -222,5 +246,6 @@ Auto-delete sau 30 ngày (TTL index)
 |---|---|---|
 | `key_id_redis_order_priority_0` | Queue order chờ gửi provider | default |
 | `place_order_lock:order:{id}` | Atomic lock khi xử lý order (TTL 120s) | default |
+| `scan_queued:order:{id}` | Đã được scan push, tránh duplicate (TTL 300s) | default |
 | `activity_logs_queue` | Queue activity logs chờ lưu MongoDB | activity_logs_redis |
 | `key_id_redis_order` | Cache order data (OrderHelper) | order_web_redis |
