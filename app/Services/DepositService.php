@@ -90,47 +90,31 @@ class DepositService
 
         DB::beginTransaction();
         try {
-            // 1. Kiểm tra trùng tid (lock để tránh race condition)
+            // 1. Kiểm tra trùng tid → bỏ qua hoàn toàn
             $existing = BankAuto::where('tid', $transactionId)->lockForUpdate()->first();
             if ($existing) {
-                $bankAuto = BankAuto::create([
-                    'tid'              => $transactionId . '_DUP_' . uniqid(),
-                    'transaction_code' => $transactionCode,
-                    'description'      => $description,
-                    'date'             => $time ?? now()->format('Y-m-d H:i:s'),
-                    'data'             => json_encode($rawData),
-                    'amount'           => $amount,
-                    'type'             => 'bank',
-                    'deposit_type'     => $source,
-                    'user_id'          => $userId,
-                    'status'           => self::STATUS_PENDING_DUPLICATE,
-                    'note'             => "Trùng giao dịch với bank_auto #{$existing->id} (tid: {$transactionId})",
-                ]);
-
-                DB::commit();
+                DB::rollBack();
 
                 $this->mlog('duplicate_tid', 'warning', [
                     'source'       => $source,
                     'tid'          => $transactionId,
                     'user_id'      => $userId,
                     'amount'       => $amount,
-                    'bank_auto_id' => $bankAuto->id,
+                    'bank_auto_id' => $existing->id,
                     'raw_payload'  => $rawData,
-                    'message'      => "Trùng tid với bank_auto #{$existing->id}",
+                    'message'      => "Trùng tid với bank_auto #{$existing->id}, bỏ qua",
                 ]);
 
-                Log::warning('Duplicate transaction saved for admin review', [
+                Log::info('Duplicate transaction, skipped', [
                     'tid'          => $transactionId,
-                    'bank_auto_id' => $bankAuto->id,
+                    'bank_auto_id' => $existing->id,
                     'user_id'      => $userId,
-                    'amount'       => $amount,
                 ]);
 
                 return [
-                    'success'      => false,
-                    'duplicate'    => true,
-                    'bank_auto_id' => $bankAuto->id,
-                    'message'      => 'Trùng giao dịch, lưu chờ admin duyệt',
+                    'success'   => false,
+                    'duplicate' => true,
+                    'message'   => 'Trùng giao dịch, bỏ qua',
                 ];
             }
 
@@ -149,44 +133,36 @@ class DepositService
                 ->first();
 
             if ($pendingRecord) {
-                // Kiểm tra lệch amount → không cộng tiền, chờ admin
+                // Kiểm tra lệch amount → tạo bản ghi mới pending_duplicate, GIỮ NGUYÊN pending gốc
+                // Không được quay bản ghi pending gốc về trạng thái khác, chỉ hết hạn mới expire
                 if ($pendingRecord->amount !== $amount) {
-                    $pendingRecord->update([
+                    $dupRecord = BankAuto::create([
                         'tid'              => $transactionId,
                         'transaction_code' => $transactionCode,
                         'description'      => $description,
                         'date'             => $time ?? now()->format('Y-m-d H:i:s'),
                         'data'             => json_encode($rawData),
+                        'amount'           => $amount,
+                        'type'             => 'bank',
                         'deposit_type'     => $source,
+                        'user_id'          => $userId,
                         'status'           => self::STATUS_PENDING_DUPLICATE,
                         'note'             => "Lệch số tiền: user tạo QR {$pendingRecord->amount}đ, thực tế chuyển {$amount}đ. Chờ admin duyệt.",
-                        'expires_at'       => null,
                     ]);
 
                     DB::commit();
-
-                    $this->mlog('pending_found', 'success', [
-                        'source'          => $source,
-                        'tid'             => $transactionId,
-                        'user_id'         => $userId,
-                        'bank_auto_id'    => $pendingRecord->id,
-                        'expected_amount' => $pendingRecord->amount,
-                        'actual_amount'   => $amount,
-                        'deposit_code'    => $transactionCode,
-                        'raw_payload'     => $rawData,
-                        'message'         => 'Tìm thấy bản ghi pending, kiểm tra amount',
-                    ]);
 
                     $this->mlog('amount_mismatch', 'warning', [
                         'source'          => $source,
                         'tid'             => $transactionId,
                         'user_id'         => $userId,
-                        'bank_auto_id'    => $pendingRecord->id,
+                        'bank_auto_id'    => $dupRecord->id,
+                        'pending_id'      => $pendingRecord->id,
                         'expected_amount' => $pendingRecord->amount,
                         'actual_amount'   => $amount,
                         'deposit_code'    => $transactionCode,
                         'raw_payload'     => $rawData,
-                        'message'         => "Lệch số tiền: tạo QR {$pendingRecord->amount}đ, chuyển thực tế {$amount}đ",
+                        'message'         => "Lệch số tiền: tạo QR {$pendingRecord->amount}đ, chuyển thực tế {$amount}đ. Bản ghi pending gốc #{$pendingRecord->id} giữ nguyên.",
                     ]);
 
                     Log::warning('Deposit amount mismatch, saved for admin review', [
@@ -194,6 +170,7 @@ class DepositService
                         'expected_amount' => $pendingRecord->amount,
                         'actual_amount'   => $amount,
                         'tid'             => $transactionId,
+                        'pending_id'      => $pendingRecord->id,
                     ]);
 
                     return [
