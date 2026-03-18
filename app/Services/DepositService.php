@@ -243,6 +243,9 @@ class DepositService
                 default  => 'Nạp tiền thành công (Macrodroid)',
             };
 
+            // Đánh dấu is_processed=true trước khi cộng tiền (dedup tầng 1)
+            $bankAuto->update(['is_processed' => true]);
+
             $dongtien = Dongtien::createTransaction(
                 $user,
                 $amount,

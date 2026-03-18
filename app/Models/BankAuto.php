@@ -27,11 +27,13 @@ class BankAuto extends Model
         'note',
         'deposit_type',
         'expires_at',
+        'is_processed',
     ];
 
     protected $casts = [
-        'amount'     => 'integer',
-        'expires_at' => 'datetime',
+        'amount'       => 'integer',
+        'expires_at'   => 'datetime',
+        'is_processed' => 'boolean',
     ];
 
     public function user(): BelongsTo

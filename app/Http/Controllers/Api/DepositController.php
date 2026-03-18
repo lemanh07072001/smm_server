@@ -138,7 +138,7 @@ class DepositController extends Controller
      */
     public function createPending(Request $request): JsonResponse
     {
-        $request->validate(['amount' => 'required|integer|min:50000']);
+        $request->validate(['amount' => 'required|integer|min:2000']);
 
         $user = Auth::user();
 

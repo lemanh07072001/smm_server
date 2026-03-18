@@ -127,6 +127,23 @@ class Pay2sController extends Controller
         // Bước 4: Tạo transaction ID nội bộ
         $transactionId = 'P2S_' . $pay2sId;
 
+        // Bước 4.5: Dedup tầng 1 — kiểm tra is_processed trước khi xử lý
+        // Dùng atomic UPDATE WHERE is_processed=false → trả về số rows affected
+        // Race condition: 2 webhook cùng lúc → chỉ 1 cái affected=1, cái còn lại affected=0 → bỏ qua
+        $existingRecord = \App\Models\BankAuto::where('tid', $transactionId)->first();
+        if ($existingRecord) {
+            if ($existingRecord->is_processed) {
+                $this->mlog('already_processed', 'warning', [
+                    'source'      => 'pay2s',
+                    'tid'         => $transactionId,
+                    'pay2s_id'    => $pay2sId,
+                    'raw_payload' => $transaction,
+                    'message'     => 'Giao dịch đã được xử lý (is_processed=true), bỏ qua',
+                ]);
+                return;
+            }
+        }
+
         $this->mlog('transaction_validate', 'success', [
             'source'          => 'pay2s',
             'pay2s_id'        => $pay2sId,
