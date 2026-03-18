@@ -47,13 +47,16 @@ class CategorySeeder extends Seeder
         ];
 
         foreach ($categories as $index => $category) {
-            Category::create([
-                'name' => $category['name'],
-                'slug' => Str::slug($category['name']),
-                'description' => $category['description'],
-                'sort_order' => $index + 1,
-                'is_active' => 1,
-            ]);
+            $slug = Str::slug($category['name']);
+            Category::updateOrCreate(
+                ['slug' => $slug],
+                [
+                    'name' => $category['name'],
+                    'description' => $category['description'],
+                    'sort_order' => $index + 1,
+                    'is_active' => 1,
+                ]
+            );
         }
     }
 }

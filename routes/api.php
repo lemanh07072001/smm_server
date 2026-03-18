@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\AffiliateController;
+use App\Http\Controllers\Api\ResellerController;
+use App\Http\Controllers\Api\ResellerPermissionController;
 use App\Http\Controllers\Api\ApiOrderController;
 use App\Http\Controllers\Api\PartnerProviderController;
 use App\Http\Controllers\Api\AuthController;
@@ -8,7 +10,6 @@ use App\Http\Controllers\Api\BankAutoController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\Pay2sController;
 use App\Http\Controllers\Api\CategoryGroupController;
-use App\Http\Controllers\Api\CodeTransactionController;
 use App\Http\Controllers\Api\CountryController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DepositController;
@@ -37,9 +38,7 @@ use Illuminate\Support\Facades\Route;
 */
 
 // Webhook routes (public - không cần auth, không giới hạn rate limit)
-Route::withoutMiddleware('throttle:api')->group(function () {
-    Route::post('/webhook/pay2s', [Pay2sController::class, 'webhook']);
-});
+Route::post('/webhook/pay2s', [Pay2sController::class, 'webhook']);
 
 // Public routes
 Route::middleware('throttle:auth')->group(function () {
@@ -149,13 +148,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{orderId}/cancel', [OrderController::class, 'cancelOrder'])->middleware('throttle:30,1');
 
     // Code Transactions
-    Route::post('/code-transactions', [CodeTransactionController::class, 'store']);
 
     // Transactions (Lịch sử giao dịch)
     Route::get('/transactions', [DongtienController::class, 'index']);
 
     // Deposits (Quản lý nạp tiền)
     Route::get('/deposits', [DepositController::class, 'index']);
+    Route::get('/deposits/pending/current', [DepositController::class, 'currentPending']);
+    Route::post('/deposits/pending', [DepositController::class, 'createPending']);
+    Route::post('/deposits/{id}/cancel', [DepositController::class, 'cancel']);
     Route::get('/deposits/{id}', [DepositController::class, 'show']);
 
     // Dashboard
@@ -216,10 +217,28 @@ Route::middleware('api_key')->group(function () {
     Route::get('/v2', [ApiOrderController::class, 'handle']);
 });
 
+// Reseller API routes (xác thực qua api_token, chỉ dành cho role reseller)
+Route::middleware('reseller_auth')->prefix('reseller')->group(function () {
+    Route::get('/services', [ResellerController::class, 'services']);
+    Route::get('/providers/allowed', [ResellerController::class, 'allowedProviders']);
+    Route::post('/providers/check', [ResellerController::class, 'checkProvider']);
+    Route::post('/orders', [ResellerController::class, 'addOrder'])->middleware('throttle:60,1');
+    Route::get('/orders', [ResellerController::class, 'orders']);
+    Route::get('/balance', [ResellerController::class, 'balance']);
+});
+
 // Super Admin routes (dev only)
 Route::middleware(['auth:sanctum', 'super_admin'])->prefix('super-admin')->group(function () {
     Route::get('/providers', [ProviderController::class, 'listSupport']);
     Route::post('/providers/{id}/toggle-supported', [ProviderController::class, 'toggleSupported']);
+
+    // Reseller Permissions (superadmin quản lý)
+    Route::get('/reseller-permissions', [ResellerPermissionController::class, 'index']);
+    Route::get('/reseller-permissions/{userId}', [ResellerPermissionController::class, 'show']);
+    Route::post('/reseller-permissions/{userId}', [ResellerPermissionController::class, 'update']);
+    Route::post('/reseller-permissions/{userId}/providers/{providerId}/toggle', [ResellerPermissionController::class, 'toggle']);
+    Route::post('/reseller-permissions/{userId}/grant-all', [ResellerPermissionController::class, 'grantAll']);
+    Route::post('/reseller-permissions/{userId}/revoke-all', [ResellerPermissionController::class, 'revokeAll']);
 
     // Partner Providers
     Route::get('/partner-providers/all', [PartnerProviderController::class, 'all']);

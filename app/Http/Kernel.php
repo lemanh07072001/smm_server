@@ -68,5 +68,6 @@ class Kernel extends HttpKernel
         'sepay.webhook' => \App\Http\Middleware\VerifySepayWebhook::class,
         'super_admin'   => \App\Http\Middleware\SuperAdmin::class,
         'api_key'       => \App\Http\Middleware\ApiKeyAuth::class,
+        'reseller_auth' => \App\Http\Middleware\ResellerAuth::class,
     ];
 }

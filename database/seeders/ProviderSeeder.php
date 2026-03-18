@@ -38,19 +38,20 @@ class ProviderSeeder extends Seeder
         ];
 
         foreach ($providers as $provider) {
-            DB::table('providers')->insert([
-                'name' => $provider['name'],
-                'code' => $provider['code'],
-                'api_url' => $provider['api_url'],
-                'api_key' => $provider['api_key'],
-                'balance' => $provider['balance'],
-                'balance_updated_at' => $provider['balance_updated_at'],
-                'is_active' => $provider['is_active'],
-                'notes' => $provider['notes'],
-                'image' => $provider['image'],
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+            DB::table('providers')->updateOrInsert(
+                ['code' => $provider['code']],
+                [
+                    'name' => $provider['name'],
+                    'api_url' => $provider['api_url'],
+                    'api_key' => $provider['api_key'],
+                    'balance' => $provider['balance'],
+                    'balance_updated_at' => $provider['balance_updated_at'],
+                    'is_active' => $provider['is_active'],
+                    'notes' => $provider['notes'],
+                    'image' => $provider['image'],
+                    'updated_at' => now(),
+                ]
+            );
         }
     }
 }

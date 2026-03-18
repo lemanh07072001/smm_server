@@ -26,10 +26,12 @@ class BankAuto extends Model
         'status',
         'note',
         'deposit_type',
+        'expires_at',
     ];
 
     protected $casts = [
-        'amount' => 'integer',
+        'amount'     => 'integer',
+        'expires_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

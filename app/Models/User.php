@@ -38,6 +38,7 @@ class User extends Authenticatable
         'referred_by',
         'affiliate_balance',
         'affiliate_commission_rate',
+        'deposit_code',
     ];
 
     /**
@@ -161,5 +162,30 @@ class User extends Authenticatable
     public function servicePrices(): HasMany
     {
         return $this->hasMany(UserServicePrice::class);
+    }
+
+    /**
+     * Danh sách provider được phép dùng (dành cho role reseller).
+     */
+    public function resellerProviderPermissions(): HasMany
+    {
+        return $this->hasMany(ResellerProviderPermission::class);
+    }
+
+    /**
+     * Kiểm tra reseller có được phép dùng provider không.
+     */
+    public function canUseProvider(int $providerId): bool
+    {
+        if (!$this->isReseller()) {
+            return true; // Không phải reseller thì không áp dụng
+        }
+
+        $permission = $this->resellerProviderPermissions()
+            ->where('provider_id', $providerId)
+            ->first();
+
+        // Nếu chưa có record → mặc định KHÔNG cho phép
+        return $permission !== null && $permission->is_allowed;
     }
 }

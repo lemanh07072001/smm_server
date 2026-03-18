@@ -39,6 +39,9 @@ class AuthController extends Controller
 
         $user = User::create($userData);
 
+        // Tự động tạo mã giao dịch cho user mới đăng ký
+        $this->createInitialTransactionCode($user);
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
@@ -47,6 +50,38 @@ class AuthController extends Controller
             'access_token' => $token,
             'token_type' => 'Bearer',
         ], 201);
+    }
+
+    /**
+     * Tạo mã nạp tiền cố định cho user mới đăng ký.
+     * Format: NAP + 6 chữ số ngẫu nhiên, unique trên DB.
+     * Retry tối đa 10 lần nếu trùng.
+     */
+    private function createInitialTransactionCode(User $user): void
+    {
+        try {
+            $code = null;
+            $maxAttempts = 10;
+
+            for ($i = 0; $i < $maxAttempts; $i++) {
+                $candidate = 'NAP' . str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+                $exists = User::where('deposit_code', $candidate)->exists();
+                if (!$exists) {
+                    $code = $candidate;
+                    break;
+                }
+            }
+
+            if ($code) {
+                $user->deposit_code = $code;
+                $user->saveQuietly(); // không fire events
+            }
+        } catch (\Exception $e) {
+            logger()->error('Register: failed to create deposit_code', [
+                'user_id' => $user->id,
+                'error'   => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

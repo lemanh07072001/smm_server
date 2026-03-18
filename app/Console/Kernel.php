@@ -3,6 +3,7 @@
 namespace App\Console;
 
 use App\Console\Commands\CheckBank;
+use App\Console\Commands\ExpireDeposits;
 use App\Console\Commands\GenerateOrderReport;
 use App\Console\Commands\GenerateUserFinancialReport;
 use Illuminate\Console\Scheduling\Schedule;
@@ -12,6 +13,7 @@ class Kernel extends ConsoleKernel
 {
     protected $commands = [
         CheckBank::class,
+        ExpireDeposits::class,
         GenerateOrderReport::class,
         GenerateUserFinancialReport::class,
     ];
@@ -69,6 +71,12 @@ class Kernel extends ConsoleKernel
             ->everyTenMinutes()
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/user-financial-report.log'));
+
+        // Expire các giao dịch pending quá 5 phút
+        $schedule->command('deposits:expire')
+            ->runInBackground()
+            ->everyMinute()
+            ->withoutOverlapping();
 
         // Lưu activity logs từ Redis vào MongoDB mỗi 1 phút
         $schedule->command('activity_log:save')

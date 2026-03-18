@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BankAuto;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class DepositController extends Controller
 {
@@ -95,6 +96,63 @@ class DepositController extends Controller
                 'manual_count' => (int) ($stats->manual_count ?? 0),
             ],
         ]);
+    }
+
+    /**
+     * Huỷ giao dịch pending
+     */
+    public function cancel(int $id): JsonResponse
+    {
+        $user = Auth::user();
+        $deposit = BankAuto::where('id', $id)
+            ->where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->first();
+
+        if (!$deposit) {
+            return response()->json(['message' => 'Không tìm thấy giao dịch.'], 404);
+        }
+
+        $deposit->update(['status' => 'cancelled']);
+
+        return response()->json(['message' => 'Đã huỷ giao dịch.']);
+    }
+
+    /**
+     * Lấy giao dịch pending còn hạn của user hiện tại
+     */
+    public function currentPending(): JsonResponse
+    {
+        $user = Auth::user();
+        $deposit = BankAuto::where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->where('expires_at', '>', now())
+            ->latest()
+            ->first();
+
+        return response()->json(['data' => $deposit]);
+    }
+
+    /**
+     * Tạo bản ghi pending khi user tạo QR thanh toán
+     */
+    public function createPending(Request $request): JsonResponse
+    {
+        $request->validate(['amount' => 'required|integer|min:50000']);
+
+        $user = Auth::user();
+
+        $deposit = BankAuto::create([
+            'user_id'          => $user->id,
+            'amount'           => $request->amount,
+            'description'      => $user->deposit_code,
+            'transaction_type' => 'PLUS',
+            'deposit_type'     => 'auto',
+            'status'           => 'pending',
+            'expires_at'       => now()->addMinutes(5),
+        ]);
+
+        return response()->json(['data' => $deposit], 201);
     }
 
     /**

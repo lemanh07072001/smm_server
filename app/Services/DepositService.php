@@ -4,13 +4,11 @@ namespace App\Services;
 
 use App\Models\AffiliateCommission;
 use App\Models\BankAuto;
+use App\Models\DepositLog;
 use App\Models\User;
 use App\Models\Dongtien;
-use App\Models\CodeTransaction;
-use App\Helpers\RedisHelper;
 use App\Events\DepositSuccess;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Log;
 
 class DepositService
@@ -20,25 +18,17 @@ class DepositService
     const STATUS_PENDING          = 'pending';
 
     /**
-     * Tim user ID tu ma giao dich trong noi dung text.
-     * Kiem tra Redis truoc, fallback sang regex parsing.
+     * Tìm user ID từ nội dung chuyển khoản.
+     * Tìm mã NAP + 6 chữ số trong content, tra cứu cột deposit_code trên bảng users.
      */
     public function findUserFromContent(string $content): ?int
     {
-        $contentLower = strtolower($content);
+        $contentUpper = strtoupper($content);
 
-        // 1. Thu tim tu Redis truoc
-        $userId = $this->findUserFromRedis($contentLower);
-        if ($userId) {
-            return $userId;
-        }
-
-        // 2. Parse truc tiep tu content
-        // Pattern: SMM + date(8) + random(6) + user_id
-        if (preg_match('/smm(\d{8})(.{6})(\d+)/', $contentLower, $matches)) {
-            $userId = (int) $matches[3];
-            if ($userId > 0 && User::find($userId)) {
-                return $userId;
+        if (preg_match('/NAP\d{6}/', $contentUpper, $matches)) {
+            $user = User::where('deposit_code', $matches[0])->first();
+            if ($user) {
+                return $user->id;
             }
         }
 
@@ -46,13 +36,14 @@ class DepositService
     }
 
     /**
-     * Parse mã giao dịch SMM từ nội dung chuyển khoản.
-     * Pattern: smm + date(8) + random(6) + user_id
+     * Trích xuất deposit_code từ nội dung chuyển khoản.
      */
     public function extractTransactionCode(string $content): ?string
     {
-        if (preg_match('/smm\d{8}.{6}\d+/i', $content, $matches)) {
-            return strtoupper($matches[0]);
+        $contentUpper = strtoupper($content);
+
+        if (preg_match('/NAP\d{6}/', $contentUpper, $matches)) {
+            return $matches[0];
         }
 
         return null;
@@ -77,8 +68,13 @@ class DepositService
 
     /**
      * Xu ly nap tien cho user.
-     * - Neu trung tid: luu bank_auto voi status pending_duplicate, KHONG cong tien
-     * - Neu khong trung: luu bank_auto status success + tao dongtien (cong tien)
+     *
+     * Logic:
+     * 1. Trùng tid → lưu pending_duplicate, KHÔNG cộng tiền
+     * 2. Tìm bản ghi pending còn hạn của user:
+     *    - Nếu có → update bản ghi đó thành success (ghi note nếu lệch amount)
+     *    - Nếu không → tạo bản ghi mới success
+     * 3. Cộng tiền theo amount thực tế Pay2s gửi
      */
     public function processDeposit(
         int $userId,
@@ -90,61 +86,180 @@ class DepositService
         string $source = 'macrodroid'
     ): array {
         $transactionCode = $this->extractTransactionCode($description);
-
-        // Kiem tra trung lap
-        $existing = $this->findDuplicateTransaction($transactionId);
-        if ($existing) {
-            // Luu lai voi trang thai cho admin kiem tra
-            $bankAuto = BankAuto::create([
-                'tid'              => $transactionId . '_DUP_' . uniqid(),
-                'transaction_code' => $transactionCode,
-                'description'      => $description,
-                'date'             => $time ?? now()->format('Y-m-d H:i:s'),
-                'data'             => json_encode($rawData),
-                'amount'           => $amount,
-                'type'             => 'bank',
-                'deposit_type'     => $source,
-                'user_id'          => $userId,
-                'status'           => self::STATUS_PENDING_DUPLICATE,
-                'note'             => "Trùng giao dịch với bank_auto #{$existing->id} (tid: {$transactionId})",
-            ]);
-
-            Log::warning('Duplicate transaction saved for admin review', [
-                'tid'          => $transactionId,
-                'bank_auto_id' => $bankAuto->id,
-                'user_id'      => $userId,
-                'amount'       => $amount,
-            ]);
-
-            return [
-                'success'      => false,
-                'duplicate'    => true,
-                'bank_auto_id' => $bankAuto->id,
-                'message'      => 'Trùng giao dịch, lưu chờ admin duyệt',
-            ];
-        }
+        $logData = []; // Tích lũy log, ghi sau commit để tránh rollback MySQL
 
         DB::beginTransaction();
         try {
+            // 1. Kiểm tra trùng tid (lock để tránh race condition)
+            $existing = BankAuto::where('tid', $transactionId)->lockForUpdate()->first();
+            if ($existing) {
+                $bankAuto = BankAuto::create([
+                    'tid'              => $transactionId . '_DUP_' . uniqid(),
+                    'transaction_code' => $transactionCode,
+                    'description'      => $description,
+                    'date'             => $time ?? now()->format('Y-m-d H:i:s'),
+                    'data'             => json_encode($rawData),
+                    'amount'           => $amount,
+                    'type'             => 'bank',
+                    'deposit_type'     => $source,
+                    'user_id'          => $userId,
+                    'status'           => self::STATUS_PENDING_DUPLICATE,
+                    'note'             => "Trùng giao dịch với bank_auto #{$existing->id} (tid: {$transactionId})",
+                ]);
+
+                DB::commit();
+
+                $this->mlog('duplicate_tid', 'warning', [
+                    'source'       => $source,
+                    'tid'          => $transactionId,
+                    'user_id'      => $userId,
+                    'amount'       => $amount,
+                    'bank_auto_id' => $bankAuto->id,
+                    'raw_payload'  => $rawData,
+                    'message'      => "Trùng tid với bank_auto #{$existing->id}",
+                ]);
+
+                Log::warning('Duplicate transaction saved for admin review', [
+                    'tid'          => $transactionId,
+                    'bank_auto_id' => $bankAuto->id,
+                    'user_id'      => $userId,
+                    'amount'       => $amount,
+                ]);
+
+                return [
+                    'success'      => false,
+                    'duplicate'    => true,
+                    'bank_auto_id' => $bankAuto->id,
+                    'message'      => 'Trùng giao dịch, lưu chờ admin duyệt',
+                ];
+            }
+
             $user = User::find($userId);
             if (!$user) {
                 DB::rollBack();
                 return ['success' => false, 'message' => 'User không tồn tại'];
             }
 
-            $bankAuto = BankAuto::create([
-                'tid'              => $transactionId,
-                'transaction_code' => $transactionCode,
-                'description'      => $description,
-                'date'             => $time ?? now()->format('Y-m-d H:i:s'),
-                'data'             => json_encode($rawData),
-                'amount'           => $amount,
-                'type'             => 'bank',
-                'deposit_type'     => $source,
-                'user_id'          => $userId,
-                'status'           => self::STATUS_SUCCESS,
-            ]);
+            // 2. Tìm bản ghi pending còn hạn của user (lock để tránh race condition)
+            $pendingRecord = BankAuto::where('user_id', $userId)
+                ->where('status', self::STATUS_PENDING)
+                ->where('expires_at', '>', now())
+                ->latest()
+                ->lockForUpdate()
+                ->first();
 
+            if ($pendingRecord) {
+                // Kiểm tra lệch amount → không cộng tiền, chờ admin
+                if ($pendingRecord->amount !== $amount) {
+                    $pendingRecord->update([
+                        'tid'              => $transactionId,
+                        'transaction_code' => $transactionCode,
+                        'description'      => $description,
+                        'date'             => $time ?? now()->format('Y-m-d H:i:s'),
+                        'data'             => json_encode($rawData),
+                        'deposit_type'     => $source,
+                        'status'           => self::STATUS_PENDING_DUPLICATE,
+                        'note'             => "Lệch số tiền: user tạo QR {$pendingRecord->amount}đ, thực tế chuyển {$amount}đ. Chờ admin duyệt.",
+                        'expires_at'       => null,
+                    ]);
+
+                    DB::commit();
+
+                    $this->mlog('pending_found', 'success', [
+                        'source'          => $source,
+                        'tid'             => $transactionId,
+                        'user_id'         => $userId,
+                        'bank_auto_id'    => $pendingRecord->id,
+                        'expected_amount' => $pendingRecord->amount,
+                        'actual_amount'   => $amount,
+                        'deposit_code'    => $transactionCode,
+                        'raw_payload'     => $rawData,
+                        'message'         => 'Tìm thấy bản ghi pending, kiểm tra amount',
+                    ]);
+
+                    $this->mlog('amount_mismatch', 'warning', [
+                        'source'          => $source,
+                        'tid'             => $transactionId,
+                        'user_id'         => $userId,
+                        'bank_auto_id'    => $pendingRecord->id,
+                        'expected_amount' => $pendingRecord->amount,
+                        'actual_amount'   => $amount,
+                        'deposit_code'    => $transactionCode,
+                        'raw_payload'     => $rawData,
+                        'message'         => "Lệch số tiền: tạo QR {$pendingRecord->amount}đ, chuyển thực tế {$amount}đ",
+                    ]);
+
+                    Log::warning('Deposit amount mismatch, saved for admin review', [
+                        'user_id'         => $userId,
+                        'expected_amount' => $pendingRecord->amount,
+                        'actual_amount'   => $amount,
+                        'tid'             => $transactionId,
+                    ]);
+
+                    return [
+                        'success' => false,
+                        'message' => 'Lệch số tiền, lưu chờ admin duyệt',
+                    ];
+                }
+
+                // Amount khớp → update pending thành success
+                $pendingRecord->update([
+                    'tid'              => $transactionId,
+                    'transaction_code' => $transactionCode,
+                    'description'      => $description,
+                    'date'             => $time ?? now()->format('Y-m-d H:i:s'),
+                    'data'             => json_encode($rawData),
+                    'deposit_type'     => $source,
+                    'status'           => self::STATUS_SUCCESS,
+                    'expires_at'       => null,
+                ]);
+
+                $bankAuto = $pendingRecord->fresh();
+
+                $logData = ['bank_auto_id' => $bankAuto->id, 'message' => 'Amount khớp, cập nhật pending → success'];
+
+            } else {
+                // Không có pending → lưu chờ admin duyệt, KHÔNG cộng tiền
+                $bankAuto = BankAuto::create([
+                    'tid'              => $transactionId,
+                    'transaction_code' => $transactionCode,
+                    'description'      => $description,
+                    'date'             => $time ?? now()->format('Y-m-d H:i:s'),
+                    'data'             => json_encode($rawData),
+                    'amount'           => $amount,
+                    'type'             => 'bank',
+                    'deposit_type'     => $source,
+                    'user_id'          => $userId,
+                    'status'           => self::STATUS_PENDING_DUPLICATE,
+                    'note'             => 'Không tìm thấy giao dịch QR pending, chờ admin duyệt',
+                ]);
+
+                DB::commit();
+
+                $this->mlog('no_pending', 'warning', [
+                    'source'       => $source,
+                    'tid'          => $transactionId,
+                    'user_id'      => $userId,
+                    'amount'       => $amount,
+                    'bank_auto_id' => $bankAuto->id,
+                    'deposit_code' => $transactionCode,
+                    'raw_payload'  => $rawData,
+                    'message'      => 'Không có QR pending, lưu chờ admin duyệt',
+                ]);
+
+                Log::warning('No pending record found, saved for admin review', [
+                    'user_id' => $userId,
+                    'amount'  => $amount,
+                    'tid'     => $transactionId,
+                ]);
+
+                return [
+                    'success' => false,
+                    'message' => 'Không có giao dịch QR pending, lưu chờ admin duyệt',
+                ];
+            }
+
+            // 3. Cộng tiền theo amount thực tế
             $noidung = match ($source) {
                 'sepay'  => 'Nạp tiền thành công (SePay)',
                 'pay2s'  => 'Nạp tiền thành công (Pay2s)',
@@ -165,8 +280,6 @@ class DepositService
                 ]
             );
 
-            $this->cleanupTransactionCode($description);
-
             if ($dongtien) {
                 broadcast(new DepositSuccess($dongtien));
             }
@@ -175,19 +288,59 @@ class DepositService
 
             DB::commit();
 
+            $newBalance = $user->fresh()->balance;
+
+            // Ghi log sau commit, tránh MongoDB exception rollback MySQL
+            $this->mlog('pending_matched', 'success', [
+                'source'       => $source,
+                'tid'          => $transactionId,
+                'user_id'      => $userId,
+                'amount'       => $amount,
+                'bank_auto_id' => $bankAuto->id,
+                'deposit_code' => $transactionCode,
+                'raw_payload'  => $rawData,
+                'message'      => $logData['message'] ?? 'Amount khớp, cập nhật pending → success',
+            ]);
+
+            $this->mlog('deposit_success', 'success', [
+                'source'       => $source,
+                'tid'          => $transactionId,
+                'user_id'      => $userId,
+                'amount'       => $amount,
+                'bank_auto_id' => $bankAuto->id,
+                'deposit_code' => $transactionCode,
+                'raw_payload'  => $rawData,
+                'new_balance'  => $newBalance,
+                'message'      => 'Cộng tiền thành công',
+            ]);
+
             Log::info("{$source} deposit success", [
                 'user_id'        => $userId,
                 'amount'         => $amount,
                 'transaction_id' => $transactionId,
-                'new_balance'    => $user->fresh()->balance,
+                'new_balance'    => $newBalance,
             ]);
 
             return [
                 'success'     => true,
-                'new_balance' => $user->fresh()->balance,
+                'new_balance' => $newBalance,
             ];
         } catch (\Exception $e) {
             DB::rollBack();
+
+            $this->mlog('deposit_exception', 'error', [
+                'source'      => $source,
+                'tid'         => $transactionId,
+                'user_id'     => $userId,
+                'amount'      => $amount,
+                'raw_payload' => $rawData,
+                'message'     => $e->getMessage(),
+                'context'     => [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                ],
+            ]);
+
             Log::error("{$source} deposit error", [
                 'user_id' => $userId,
                 'amount'  => $amount,
@@ -206,11 +359,12 @@ class DepositService
         string $description,
         ?string $time,
         int $amount,
-        array $rawData
+        array $rawData,
+        string $source = 'unknown'
     ): BankAuto {
         $transactionCode = $this->extractTransactionCode($description);
 
-        return BankAuto::create([
+        $bankAuto = BankAuto::create([
             'tid'              => $transactionId,
             'transaction_code' => $transactionCode,
             'description'      => $description,
@@ -218,10 +372,24 @@ class DepositService
             'data'             => json_encode($rawData),
             'amount'           => $amount,
             'type'             => 'bank',
-            'deposit_type'     => 'pending',
+            'deposit_type'     => $source,
             'status'           => self::STATUS_PENDING,
+            'note'             => 'Không tìm thấy user từ nội dung chuyển khoản, chờ admin duyệt',
             'user_id'          => null,
         ]);
+
+        $this->mlog('no_user_found', 'warning', [
+            'source'       => $source,
+            'tid'          => $transactionId,
+            'amount'       => $amount,
+            'deposit_code' => $transactionCode,
+            'bank_auto_id' => $bankAuto->id,
+            'raw_payload'  => $rawData,
+            'message'      => 'Không tìm thấy user từ nội dung, lưu chờ admin duyệt',
+            'context'      => ['description' => $description],
+        ]);
+
+        return $bankAuto;
     }
 
     /**
@@ -240,11 +408,19 @@ class DepositService
 
         DB::beginTransaction();
         try {
+            // Chặn double approve: kiểm tra đã có dongtien cho bank_auto này chưa
+            if (Dongtien::where('bank_auto_id', $bankAuto->id)->exists()) {
+                DB::rollBack();
+                return ['success' => false, 'message' => 'Giao dịch đã được duyệt trước đó'];
+            }
+
             $user = User::find($bankAuto->user_id);
             if (!$user) {
                 DB::rollBack();
                 return ['success' => false, 'message' => 'User không tồn tại'];
             }
+
+            $bankAuto->update(['status' => self::STATUS_SUCCESS]);
 
             $dongtien = Dongtien::createTransaction(
                 $user,
@@ -259,8 +435,6 @@ class DepositService
                 ]
             );
 
-            $bankAuto->update(['status' => self::STATUS_SUCCESS]);
-
             if ($dongtien) {
                 broadcast(new DepositSuccess($dongtien));
             }
@@ -269,10 +443,14 @@ class DepositService
 
             DB::commit();
 
-            // Cleanup transaction code khỏi Redis/DB sau khi duyệt
-            if ($bankAuto->description) {
-                $this->cleanupTransactionCode($bankAuto->description);
-            }
+            $this->mlog('admin_approved', 'success', [
+                'source'       => 'admin',
+                'tid'          => $bankAuto->tid,
+                'user_id'      => $bankAuto->user_id,
+                'amount'       => $bankAuto->amount,
+                'bank_auto_id' => $bankAuto->id,
+                'message'      => 'Admin duyệt giao dịch thành công',
+            ]);
 
             return [
                 'success'     => true,
@@ -304,6 +482,18 @@ class DepositService
         ]);
 
         return ['success' => true];
+    }
+
+    /**
+     * Ghi log từng bước xử lý vào MongoDB.
+     */
+    private function mlog(string $step, string $status, array $data = []): void
+    {
+        try {
+            DepositLog::create(array_merge(['step' => $step, 'status' => $status], $data));
+        } catch (\Exception $e) {
+            Log::error('DepositLog MongoDB write failed', ['error' => $e->getMessage()]);
+        }
     }
 
     /**
@@ -374,75 +564,4 @@ class DepositService
         }
     }
 
-    /**
-     * Tim user tu Redis transaction code cache.
-     */
-    private function findUserFromRedis(string $contentLower): ?int
-    {
-        try {
-            $redis = Redis::connection(RedisHelper::REDIS_CODE_TRANSACTIONS);
-            $keys = $redis->keys('*');
-
-            if (empty($keys)) {
-                return null;
-            }
-
-            $values = $redis->mget($keys);
-
-            foreach ($values as $value) {
-                if (!$value) continue;
-
-                $data = json_decode($value, true);
-                if (!$data || empty($data['transaction_code'])) continue;
-
-                $code = strtolower($data['transaction_code']);
-                if (strpos($contentLower, $code) !== false) {
-                    if (preg_match('/smm(\d{8})(.{6})(\d+)/', $code, $matches)) {
-                        return (int) $matches[3];
-                    }
-                }
-            }
-        } catch (\Exception $e) {
-            Log::error('Error finding user from Redis', ['error' => $e->getMessage()]);
-        }
-
-        return null;
-    }
-
-    /**
-     * Xoa ma giao dich da xu ly khoi Redis va Database.
-     */
-    public function cleanupTransactionCode(string $content): void
-    {
-        $contentLower = strtolower($content);
-
-        try {
-            $redis = Redis::connection(RedisHelper::REDIS_CODE_TRANSACTIONS);
-            $keys = $redis->keys('*');
-
-            if (empty($keys)) {
-                return;
-            }
-
-            $values = $redis->mget($keys);
-
-            foreach ($keys as $index => $key) {
-                $value = $values[$index] ?? null;
-                if (!$value) continue;
-
-                $data = json_decode($value, true);
-                if (!$data || empty($data['transaction_code'])) continue;
-
-                $code = strtolower($data['transaction_code']);
-                if (strpos($contentLower, $code) !== false) {
-                    $redis->del($key);
-                    CodeTransaction::where('transaction_code', $data['transaction_code'])->delete();
-                    Log::info('Cleaned up transaction code', ['code' => $data['transaction_code']]);
-                    break;
-                }
-            }
-        } catch (\Exception $e) {
-            Log::error('Error cleaning up transaction code', ['error' => $e->getMessage()]);
-        }
-    }
 }
