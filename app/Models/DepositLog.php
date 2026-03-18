@@ -21,5 +21,6 @@ class DepositLog extends Model
         'bank_auto_id',
         'message',
         'context',     // dữ liệu thô thêm
+        'raw_payload', // payload gốc từ provider
     ];
 }

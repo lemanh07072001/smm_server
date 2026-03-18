@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\BankAuto;
+use App\Models\DepositLog;
 use App\Services\DepositService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -16,6 +17,33 @@ class BankAutoController extends Controller
     public function __construct(DepositService $depositService)
     {
         $this->depositService = $depositService;
+    }
+
+    /**
+     * Lấy deposit logs theo bank_auto_id hoặc tid
+     * GET /api/admin/bank-auto/{id}/logs
+     */
+    public function logs(Request $request, int $id): JsonResponse
+    {
+        if (!$request->user() || !$request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $bankAuto = BankAuto::find($id);
+        if (!$bankAuto) {
+            return response()->json(['success' => false, 'message' => 'Không tìm thấy giao dịch'], 404);
+        }
+
+        // Lấy logs theo bank_auto_id hoặc tid
+        $logs = DepositLog::where(function ($q) use ($bankAuto) {
+                $q->where('bank_auto_id', $bankAuto->id)
+                  ->orWhere('tid', $bankAuto->tid);
+            })
+            ->orderBy('created_at', 'asc')
+            ->get(['step', 'status', 'source', 'tid', 'user_id', 'amount', 'expected_amount',
+                   'deposit_code', 'bank_auto_id', 'message', 'context', 'raw_payload', 'created_at']);
+
+        return response()->json(['success' => true, 'data' => $logs]);
     }
 
     /**
