@@ -34,16 +34,39 @@ class BankAutoController extends Controller
             return response()->json(['success' => false, 'message' => 'Không tìm thấy giao dịch'], 404);
         }
 
-        // Lấy logs theo bank_auto_id hoặc tid
-        $logs = DepositLog::where(function ($q) use ($bankAuto) {
-                $q->where('bank_auto_id', $bankAuto->id)
-                  ->orWhere('tid', $bankAuto->tid);
-            })
-            ->orderBy('created_at', 'asc')
-            ->get(['step', 'status', 'source', 'tid', 'user_id', 'amount', 'expected_amount',
-                   'deposit_code', 'bank_auto_id', 'message', 'context', 'raw_payload', 'created_at']);
+        // Lấy toàn bộ logs liên quan: theo tid (bao gồm cả bước đầu chưa có bank_auto_id)
+        // hoặc theo bank_auto_id (cho các bước sau khi đã tạo record)
+        $query = DepositLog::where(function ($q) use ($bankAuto) {
+            if ($bankAuto->tid) {
+                $q->where('tid', $bankAuto->tid);
+            }
+            $q->orWhere('bank_auto_id', $bankAuto->id);
+        })->orderBy('created_at', 'asc');
 
-        return response()->json(['success' => true, 'data' => $logs]);
+        $logs = $query->get()->map(function ($log) {
+            return [
+                'step'             => $log->step,
+                'status'           => $log->status,
+                'source'           => $log->source,
+                'tid'              => $log->tid,
+                'user_id'          => $log->user_id,
+                'amount'           => $log->amount,
+                'expected_amount'  => $log->expected_amount,
+                'deposit_code'     => $log->deposit_code,
+                'bank_auto_id'     => $log->bank_auto_id,
+                'message'          => $log->message,
+                'context'          => $log->context,
+                'raw_payload'      => $log->raw_payload,
+                'created_at'       => $log->created_at,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'tid'     => $bankAuto->tid,
+            'total'   => $logs->count(),
+            'data'    => $logs,
+        ]);
     }
 
     /**
