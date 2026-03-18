@@ -26,6 +26,7 @@ class BankAuto extends Model
         'status',
         'note',
         'deposit_type',
+        'payment_channel',
         'expires_at',
         'is_processed',
     ];

@@ -86,7 +86,16 @@ class DepositService
         string $source = 'macrodroid'
     ): array {
         $transactionCode = $this->extractTransactionCode($description);
-        $depositType = $source === 'manual' ? 'manual' : 'auto';
+        $depositType     = $source === 'manual' ? 'manual' : 'auto';
+        $paymentChannel  = match ($source) {
+            'momo'                    => 'momo',
+            'zalopay'                 => 'zalopay',
+            'vnpay'                   => 'vnpay',
+            'binance'                 => 'binance',
+            'pay2s', 'sepay',
+            'macrodroid', 'manual'    => 'bank',
+            default                   => 'bank',
+        };
         $logData = []; // Tích lũy log, ghi sau commit để tránh rollback MySQL
 
         DB::beginTransaction();
@@ -147,6 +156,7 @@ class DepositService
                         'amount'           => $amount,
                         'type'             => 'bank',
                         'deposit_type'     => $depositType,
+                        'payment_channel'  => $paymentChannel,
                         'user_id'          => $userId,
                         'status'           => self::STATUS_PENDING_DUPLICATE,
                         'note'             => "Lệch số tiền: user tạo QR {$pendingRecord->amount}đ, thực tế chuyển {$amount}đ. Chờ admin duyệt.",
@@ -189,6 +199,7 @@ class DepositService
                     'date'             => $time ?? now()->format('Y-m-d H:i:s'),
                     'data'             => json_encode($rawData),
                     'deposit_type'     => $depositType,
+                    'payment_channel'  => $paymentChannel,
                     'status'           => self::STATUS_SUCCESS,
                     'expires_at'       => null,
                 ]);
@@ -208,6 +219,7 @@ class DepositService
                     'amount'           => $amount,
                     'type'             => 'bank',
                     'deposit_type'     => $depositType,
+                    'payment_channel'  => $paymentChannel,
                     'user_id'          => $userId,
                     'status'           => self::STATUS_PENDING_DUPLICATE,
                     'note'             => 'Không tìm thấy giao dịch QR pending, chờ admin duyệt',
@@ -345,7 +357,16 @@ class DepositService
         string $source = 'unknown'
     ): BankAuto {
         $transactionCode = $this->extractTransactionCode($description);
-        $depositType = $source === 'manual' ? 'manual' : 'auto';
+        $depositType     = $source === 'manual' ? 'manual' : 'auto';
+        $paymentChannel  = match ($source) {
+            'momo'                    => 'momo',
+            'zalopay'                 => 'zalopay',
+            'vnpay'                   => 'vnpay',
+            'binance'                 => 'binance',
+            'pay2s', 'sepay',
+            'macrodroid', 'manual'    => 'bank',
+            default                   => 'bank',
+        };
 
         $bankAuto = BankAuto::create([
             'tid'              => $transactionId,
@@ -356,6 +377,7 @@ class DepositService
             'amount'           => $amount,
             'type'             => 'bank',
             'deposit_type'     => $depositType,
+            'payment_channel'  => $paymentChannel,
             'status'           => self::STATUS_PENDING,
             'note'             => 'Không tìm thấy user từ nội dung chuyển khoản, chờ admin duyệt',
             'user_id'          => null,
