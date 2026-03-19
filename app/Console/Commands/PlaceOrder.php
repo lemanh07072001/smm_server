@@ -134,7 +134,8 @@ class PlaceOrder extends Command
                         Log::error("PlaceOrder ADD: #{$order->id} -> FAILED -> STATUS_FAILED");
                         RedisHelper::del($lockKey);
                     } else {
-                        $order->retry_count = $newRetry;
+                        $order->retry_count  = $newRetry;
+                        $order->note         = "[Retry {$newRetry}/" . Order::RETRY_COUNT . "] " . ($result['error'] ?? 'Unknown error');
                         $order->save();
 
                         $decoded['retry_count'] = $newRetry;

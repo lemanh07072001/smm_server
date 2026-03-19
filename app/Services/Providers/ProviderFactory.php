@@ -8,14 +8,18 @@ use InvalidArgumentException;
 class ProviderFactory
 {
     protected static array $providers = [
-        'trao_doi_tuong_tac' => TraoDoiTuongTacProvider::class,
+        // Generic SMM Panel format (key/action/service/link/quantity, field "orders")
+        // URL lấy từ api_url trong DB — mỗi provider chỉ khác nhau URL
+        'trao_doi_tuong_tac' => GenericSmmProvider::class,
+        'smm'                => GenericSmmProvider::class,
+        'smmking'            => GenericSmmProvider::class,
+        'smmapir'            => GenericSmmProvider::class,
+        'smmzone'            => GenericSmmProvider::class,
+
+        // Providers có format/logic riêng
         'smm_panel'          => SmmPanelProvider::class,
         'omo'                => OmoProvider::class,
-        'smmking'            => SmmKingProvider::class,
-        'smm'                => SmmProvider::class,
         '1kview'             => OneKViewProvider::class,
-        'smmzone'            => SmmZoneProvider::class,
-        'smmapir'            => SmmApirProvider::class,
         'buffviewer'         => BuffViewerProvider::class,
         // Thêm provider mới ở đây:
         // 'another_provider' => AnotherProvider::class,
