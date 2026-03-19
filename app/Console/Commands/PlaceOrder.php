@@ -859,7 +859,7 @@ class PlaceOrder extends Command
         try {
             $refundAmount = (float) $order->charge_amount;
 
-            $order->update([
+            DB::table('orders')->where('id', $order->id)->update([
                 'status'        => Order::STATUS_FAILED,
                 'note'          => $errorMessage,
                 'error_message' => $errorMessage,
