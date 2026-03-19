@@ -33,14 +33,14 @@ class Kernel extends ConsoleKernel
         // Quét orders STATUS_PENDING chưa được đẩy vào queue mỗi 30s
         $schedule->command('order_place scan')
             ->runInBackground()
-            ->everyMinute()
+            ->everyThirtySeconds()
             ->withoutOverlapping(5)
             ->appendOutputTo(storage_path('logs/place-order-scan.log'));
 
         // Kiểm tra trạng thái orders từ provider mỗi 30s
         $schedule->command('order_place status')
             ->runInBackground()
-            ->everyMinute()
+            ->everyThirtySeconds()
             ->withoutOverlapping(5)
             ->appendOutputTo(storage_path('logs/place-order-status.log'));
 
