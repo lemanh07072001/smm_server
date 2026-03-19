@@ -119,6 +119,102 @@ class DepositController extends Controller
     }
 
     /**
+     * Admin: danh sách lệnh nạp tiền (BankAuto) — dùng riêng cho admin
+     * GET /api/admin/deposits
+     */
+    public function adminIndex(Request $request): JsonResponse
+    {
+        if (!$request->user() || !$request->user()->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $search      = $request->input('search');
+        $status      = $request->input('status');
+        $depositType = $request->input('deposit_type');
+        $channel     = $request->input('payment_channel');
+
+        $query = BankAuto::with('user')->orderBy('created_at', 'desc');
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('tid', 'like', "%{$search}%")
+                  ->orWhere('description', 'like', "%{$search}%")
+                  ->orWhere('transaction_code', 'like', "%{$search}%")
+                  ->orWhereHas('user', fn($u) => $u->where('email', 'like', "%{$search}%"));
+            });
+        }
+        if ($status && $status !== 'all')      $query->where('status', $status);
+        if ($depositType && $depositType !== 'all') $query->where('deposit_type', $depositType);
+        if ($channel && $channel !== 'all')    $query->where('payment_channel', $channel);
+
+        $perPage  = (int) $request->get('per_page', 20);
+        $deposits = $query->paginate($perPage);
+
+        $stats = \DB::table('bank_auto')->selectRaw('
+            COUNT(*) as total_count,
+            SUM(CASE WHEN status = "success" THEN amount ELSE 0 END) as total_success,
+            SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending_count,
+            SUM(CASE WHEN deposit_type = "auto" THEN 1 ELSE 0 END) as auto_count,
+            SUM(CASE WHEN deposit_type = "manual" THEN 1 ELSE 0 END) as manual_count
+        ')->first();
+
+        return response()->json([
+            'data'         => $deposits->items(),
+            'current_page' => $deposits->currentPage(),
+            'per_page'     => $deposits->perPage(),
+            'total'        => $deposits->total(),
+            'last_page'    => $deposits->lastPage(),
+            'stats'        => [
+                'total_count'   => (int) ($stats->total_count ?? 0),
+                'total_success' => (int) ($stats->total_success ?? 0),
+                'pending_count' => (int) ($stats->pending_count ?? 0),
+                'auto_count'    => (int) ($stats->auto_count ?? 0),
+                'manual_count'  => (int) ($stats->manual_count ?? 0),
+            ],
+        ]);
+    }
+
+    /**
+     * Admin: nhật ký webhook (DepositLog MongoDB)
+     * GET /api/admin/webhook-logs
+     */
+    public function webhookLogs(Request $request): JsonResponse
+    {
+        if (!$request->user() || !$request->user()->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $search  = $request->input('search');
+        $status  = $request->input('status');
+        $source  = $request->input('source');
+        $step    = $request->input('step');
+
+        $query = \App\Models\DepositLog::orderBy('created_at', 'desc');
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('tid', 'like', "%{$search}%")
+                  ->orWhere('message', 'like', "%{$search}%")
+                  ->orWhere('deposit_code', 'like', "%{$search}%");
+            });
+        }
+        if ($status && $status !== 'all') $query->where('status', $status);
+        if ($source && $source !== 'all') $query->where('source', $source);
+        if ($step   && $step   !== 'all') $query->where('step', $step);
+
+        $perPage = (int) $request->get('per_page', 30);
+        $logs    = $query->paginate($perPage);
+
+        return response()->json([
+            'data'         => $logs->items(),
+            'current_page' => $logs->currentPage(),
+            'per_page'     => $logs->perPage(),
+            'total'        => $logs->total(),
+            'last_page'    => $logs->lastPage(),
+        ]);
+    }
+
+    /**
      * Lấy giao dịch pending còn hạn của user hiện tại
      */
     public function currentPending(): JsonResponse

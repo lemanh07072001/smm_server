@@ -104,6 +104,58 @@ class BankAutoController extends Controller
     }
 
     /**
+     * Admin cộng tiền thủ công cho BankAuto cụ thể.
+     * POST /api/admin/bank-auto/{id}/manual-credit
+     *
+     * Bước 1 (controller):
+     *   - is_processed = true  → 400 "Đã xử lý rồi"
+     *   - amount <= 0          → 400 "Số tiền không hợp lệ"
+     */
+    public function manualCredit(Request $request, int $id): JsonResponse
+    {
+        if (!$request->user() || !$request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $bankAuto = BankAuto::find($id);
+        if (!$bankAuto) {
+            return response()->json(['success' => false, 'message' => 'Không tìm thấy giao dịch'], 404);
+        }
+
+        // Bước 1: status=success → không cộng được
+        if ($bankAuto->status === 'success') {
+            return response()->json(['success' => false, 'message' => 'Giao dịch đã thành công, không thể cộng lại'], 400);
+        }
+
+        // Bước 1: kiểm tra amount
+        if ($bankAuto->amount <= 0) {
+            return response()->json(['success' => false, 'message' => 'Số tiền không hợp lệ'], 400);
+        }
+
+        $request->validate([
+            'admin_note' => 'nullable|string|max:500',
+        ]);
+
+        $result = $this->depositService->manualCredit(
+            $bankAuto,
+            $request->input('admin_note', 'Admin cộng tiền thủ công'),
+            $request->user()->id
+        );
+
+        if (!$result['success']) {
+            return response()->json(['success' => false, 'message' => $result['message']], 400);
+        }
+
+        return response()->json([
+            'success'      => true,
+            'message'      => 'Đã cộng tiền thành công',
+            'bank_auto_id' => $result['bank_auto_id'],
+            'tid'          => $result['tid'],
+            'new_balance'  => $result['new_balance'],
+        ]);
+    }
+
+    /**
      * Admin cộng tiền thủ công cho giao dịch pending/expired
      * POST /api/admin/bank-auto/{id}/credit
      */

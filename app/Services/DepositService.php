@@ -5,9 +5,11 @@ namespace App\Services;
 use App\Models\AffiliateCommission;
 use App\Models\BankAuto;
 use App\Models\DepositLog;
+use App\Models\TransactionBank;
 use App\Models\User;
 use App\Models\Dongtien;
 use App\Events\DepositSuccess;
+use App\Helpers\TelegramHelper;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -134,16 +136,30 @@ class DepositService
                 return ['success' => false, 'message' => 'User không tồn tại'];
             }
 
-            // 2. Tìm bản ghi pending/expired của user (lock để tránh race condition)
-            // Bao gồm expired để xử lý grace period (Pay2s gửi webhook muộn)
+            // 2. Chỉ tìm bản ghi PENDING — webhook đến sau khi expired không tự cộng, nhờ Admin xử lý
             $pendingRecord = BankAuto::where('user_id', $userId)
-                ->whereIn('status', [self::STATUS_PENDING, 'expired'])
-                ->whereNull('tid')  // Chỉ lấy record chưa được gắn tid (chưa xử lý lần nào)
+                ->where('status', self::STATUS_PENDING)
+                ->whereNull('tid')
                 ->latest()
                 ->lockForUpdate()
                 ->first();
 
             if ($pendingRecord) {
+                // Guard: sau khi lock, kiểm tra lại status — có thể đã được xử lý bởi request khác
+                if ($pendingRecord->status === self::STATUS_SUCCESS) {
+                    DB::rollBack();
+                    $this->mlog('duplicate_tid', 'warning', [
+                        'source'       => $source,
+                        'tid'          => $transactionId,
+                        'user_id'      => $userId,
+                        'amount'       => $amount,
+                        'bank_auto_id' => $pendingRecord->id,
+                        'raw_payload'  => $rawData,
+                        'message'      => "BankAuto #{$pendingRecord->id} đã là success, bỏ qua",
+                    ]);
+                    return ['success' => false, 'duplicate' => true, 'message' => 'Giao dịch đã được xử lý'];
+                }
+
                 // Kiểm tra lệch amount → tạo bản ghi mới pending_duplicate, GIỮ NGUYÊN pending gốc
                 // Không được quay bản ghi pending gốc về trạng thái khác, chỉ hết hạn mới expire
                 if ($pendingRecord->amount !== $amount) {
@@ -257,8 +273,8 @@ class DepositService
                 default  => 'Nạp tiền thành công (Macrodroid)',
             };
 
-            // Đánh dấu is_processed=true trước khi cộng tiền (dedup tầng 1)
-            $bankAuto->update(['is_processed' => true]);
+            // Đánh dấu is_processed=true và processed_at trước khi cộng tiền (dedup tầng 1)
+            $bankAuto->update(['is_processed' => true, 'processed_at' => now()]);
 
             $dongtien = Dongtien::createTransaction(
                 $user,
@@ -278,11 +294,24 @@ class DepositService
                 broadcast(new DepositSuccess($dongtien));
             }
 
+            $user->increment('total_deposited', $amount);
+
             $this->creditAffiliateCommission($user, $amount, $bankAuto->id);
 
             DB::commit();
 
             $newBalance = $user->fresh()->balance;
+
+            // Telegram notification sau commit
+            try {
+                $amountFormatted = number_format($amount, 0, ',', '.');
+                $balanceFormatted = number_format($newBalance, 0, ',', '.');
+                TelegramHelper::sendNotifyNapTienSystem(
+                    "💰 Nạp tiền ({$source}) — {$user->name} (#{$userId}) — {$amountFormatted}đ — Số dư: {$balanceFormatted}đ"
+                );
+            } catch (\Exception $e) {
+                Log::warning('Telegram deposit notification failed', ['error' => $e->getMessage()]);
+            }
 
             // Ghi log sau commit, tránh MongoDB exception rollback MySQL
             $this->mlog('pending_matched', 'success', [
@@ -395,6 +424,275 @@ class DepositService
         ]);
 
         return $bankAuto;
+    }
+
+    /**
+     * Luồng nạp tay từ TransactionBank (Admin chọn GD ngân hàng raw → cộng tiền).
+     *
+     * 1. Validate đã làm ở controller (is_processed, transfer_type=IN, amount>0)
+     * 2. Tìm BankAuto PENDING của user + amount khớp
+     *    Không tìm thấy → tạo BankAuto mới:
+     *      transaction_code = "MANUAL_{txn_id}_{timestamp}"
+     *      deposit_type     = 'manual', status = PENDING
+     * 3. Guard: status=success hoặc đã có dongtien → rollback
+     * 4. tid = "MANUAL_BANK_{txn_id}_{timestamp}" → cộng tiền
+     * 5. transaction_bank.is_processed = true, bank_auto_id = bankAuto->id
+     */
+    public function manualCreditFromTransaction(
+        TransactionBank $txn,
+        int $userId,
+        string $adminNote,
+        int $adminId
+    ): array {
+        $user = User::find($userId);
+        if (!$user) {
+            return ['success' => false, 'message' => 'User không tồn tại'];
+        }
+
+        $amount = $txn->amount;
+
+        DB::beginTransaction();
+        try {
+            // Bước 2: Tìm BankAuto pending/expired/cancelled của user + amount khớp
+            $bankAuto = BankAuto::where('user_id', $userId)
+                ->whereIn('status', [self::STATUS_PENDING, 'expired', 'cancelled'])
+                ->where('amount', $amount)
+                ->whereNull('tid')
+                ->latest()
+                ->lockForUpdate()
+                ->first();
+
+            if (!$bankAuto) {
+                // Tạo BankAuto mới
+                $bankAuto = BankAuto::create([
+                    'user_id'          => $userId,
+                    'amount'           => $amount,
+                    'type'             => 'bank',
+                    'deposit_type'     => 'manual',
+                    'payment_channel'  => 'bank',
+                    'transaction_code' => 'MANUAL_' . $txn->id . '_' . now()->timestamp,
+                    'description'      => $txn->content ?? '',
+                    'date'             => now()->format('Y-m-d H:i:s'),
+                    'status'           => self::STATUS_PENDING,
+                    'note'             => $adminNote,
+                    'is_processed'     => false,
+                ]);
+            }
+
+            // Bước 3: Guard sau lock
+            if ($bankAuto->status === self::STATUS_SUCCESS) {
+                DB::rollBack();
+                return ['success' => false, 'message' => 'Giao dịch đã được xử lý (status=success)'];
+            }
+
+            if (Dongtien::where('bank_auto_id', $bankAuto->id)->exists()) {
+                DB::rollBack();
+                return ['success' => false, 'message' => 'Giao dịch đã được cộng tiền trước đó'];
+            }
+
+            // Bước 4: tid + cộng tiền
+            $tid = 'MANUAL_BANK_' . $txn->id . '_' . now()->timestamp;
+
+            $bankAuto->update([
+                'status'       => self::STATUS_SUCCESS,
+                'tid'          => $tid,
+                'deposit_type' => 'manual',
+                'note'         => $adminNote,
+                'is_processed' => true,
+                'processed_at' => now(),
+                'expires_at'   => null,
+            ]);
+
+            $dongtien = Dongtien::createTransaction(
+                $user,
+                $amount,
+                Dongtien::TYPE_DEPOSIT,
+                'Nạp tiền thành công (Admin cộng thủ công)',
+                [
+                    'thoigian'       => now(),
+                    'payment_method' => 'bank',
+                    'payment_ref'    => $tid,
+                    'bank_auto_id'   => $bankAuto->id,
+                ]
+            );
+
+            if ($dongtien) {
+                broadcast(new DepositSuccess($dongtien));
+            }
+
+            $user->increment('total_deposited', $amount);
+
+            // Bước 5: đánh dấu TransactionBank đã xử lý
+            $txn->update([
+                'is_processed' => true,
+                'bank_auto_id' => $bankAuto->id,
+            ]);
+
+            $this->creditAffiliateCommission($user, $amount, $bankAuto->id);
+
+            DB::commit();
+
+            $this->mlog('admin_manual_credit_txn', 'success', [
+                'source'              => 'admin',
+                'tid'                 => $tid,
+                'user_id'             => $userId,
+                'amount'              => $amount,
+                'bank_auto_id'        => $bankAuto->id,
+                'transaction_bank_id' => $txn->id,
+                'message'             => "Admin #{$adminId} cộng tiền thủ công từ TransactionBank #{$txn->id}: {$adminNote}",
+            ]);
+
+            return [
+                'success'      => true,
+                'bank_auto_id' => $bankAuto->id,
+                'tid'          => $tid,
+                'new_balance'  => $user->fresh()->balance,
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('manualCreditFromTransaction error', [
+                'transaction_bank_id' => $txn->id,
+                'user_id'             => $userId,
+                'error'               => $e->getMessage(),
+            ]);
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Admin cộng tiền thủ công cho BankAuto đã được chọn.
+     *
+     * Bước 2: Tìm BankAuto PENDING của cùng user có amount khớp + transaction_code IS NOT NULL.
+     *         Nếu không có → tạo BankAuto mới (transaction_code = MANUAL_{userId}_{timestamp}).
+     * Bước 3: LOCK FOR UPDATE:
+     *         - status = success → ❌ rollback "Đã xử lý (status=success)"
+     *         - tid trùng record khác → ❌ rollback "Giao dịch tid=... đã xử lý"
+     *         Status được cộng: pending, expired, cancelled, mới tạo.
+     * Bước 4: BankAuto → success, tid = MANUAL_BANK_{id}_{ts}, is_processed = true.
+     *         Dongtien.create → user.sodu += amount → broadcast → affiliate.
+     */
+    public function manualCredit(BankAuto $inputBankAuto, string $adminNote, int $adminId): array
+    {
+        $userId = $inputBankAuto->user_id;
+        $amount = $inputBankAuto->amount;
+
+        $user = User::find($userId);
+        if (!$user) {
+            return ['success' => false, 'message' => 'User không tồn tại'];
+        }
+
+        DB::beginTransaction();
+        try {
+            // Bước 2: Tìm BankAuto pending/expired/cancelled của user, khớp amount, có transaction_code
+            $bankAuto = BankAuto::where('user_id', $userId)
+                ->whereIn('status', [self::STATUS_PENDING, 'expired', 'cancelled'])
+                ->where('amount', $amount)
+                ->whereNotNull('transaction_code')
+                ->where('id', $inputBankAuto->id) // ưu tiên đúng record được chọn
+                ->lockForUpdate()
+                ->first();
+
+            if (!$bankAuto) {
+                // Thử tìm bất kỳ record khớp (trường hợp record chọn không có transaction_code)
+                $bankAuto = BankAuto::where('user_id', $userId)
+                    ->whereIn('status', [self::STATUS_PENDING, 'expired', 'cancelled'])
+                    ->where('amount', $amount)
+                    ->whereNotNull('transaction_code')
+                    ->latest()
+                    ->lockForUpdate()
+                    ->first();
+            }
+
+            if (!$bankAuto) {
+                // Tạo BankAuto mới
+                $txnCode = 'MANUAL_' . $userId . '_' . now()->timestamp;
+                $bankAuto = BankAuto::create([
+                    'user_id'          => $userId,
+                    'amount'           => $amount,
+                    'type'             => 'bank',
+                    'deposit_type'     => 'manual',
+                    'payment_channel'  => 'bank',
+                    'transaction_code' => $txnCode,
+                    'status'           => self::STATUS_PENDING,
+                    'note'             => $adminNote,
+                    'is_processed'     => false,
+                    'date'             => now()->format('Y-m-d H:i:s'),
+                ]);
+            }
+
+            // Bước 3: Lock — kiểm tra lớp 2
+            if ($bankAuto->status === self::STATUS_SUCCESS) {
+                DB::rollBack();
+                return ['success' => false, 'message' => 'Đã xử lý (status=success)'];
+            }
+
+            if (Dongtien::where('bank_auto_id', $bankAuto->id)->exists()) {
+                DB::rollBack();
+                return ['success' => false, 'message' => 'Giao dịch đã được cộng tiền trước đó'];
+            }
+
+            $tid = 'MANUAL_BANK_' . $bankAuto->id . '_' . now()->timestamp;
+
+            if (BankAuto::where('tid', $tid)->where('id', '!=', $bankAuto->id)->exists()) {
+                DB::rollBack();
+                return ['success' => false, 'message' => "Giao dịch tid={$tid} đã xử lý"];
+            }
+
+            // Bước 4: Cộng tiền
+            $bankAuto->update([
+                'status'          => self::STATUS_SUCCESS,
+                'tid'             => $tid,
+                'deposit_type'    => 'manual',
+                'payment_channel' => 'bank',
+                'note'            => $adminNote,
+                'is_processed'    => true,
+                'expires_at'      => null,
+            ]);
+
+            $dongtien = Dongtien::createTransaction(
+                $user,
+                $amount,
+                Dongtien::TYPE_DEPOSIT,
+                'Nạp tiền thành công (Admin cộng thủ công)',
+                [
+                    'thoigian'       => now(),
+                    'payment_method' => 'bank',
+                    'payment_ref'    => $tid,
+                    'bank_auto_id'   => $bankAuto->id,
+                ]
+            );
+
+            if ($dongtien) {
+                broadcast(new DepositSuccess($dongtien));
+            }
+
+            $this->creditAffiliateCommission($user, $amount, $bankAuto->id);
+
+            DB::commit();
+
+            $this->mlog('admin_manual_credit', 'success', [
+                'source'       => 'admin',
+                'tid'          => $tid,
+                'user_id'      => $userId,
+                'amount'       => $amount,
+                'bank_auto_id' => $bankAuto->id,
+                'message'      => "Admin #{$adminId} cộng tiền thủ công {$amount}đ: {$adminNote}",
+            ]);
+
+            return [
+                'success'      => true,
+                'bank_auto_id' => $bankAuto->id,
+                'tid'          => $tid,
+                'new_balance'  => $user->fresh()->balance,
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Admin manual credit error', [
+                'bank_auto_id' => $inputBankAuto->id,
+                'error'        => $e->getMessage(),
+            ]);
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
     }
 
     /**

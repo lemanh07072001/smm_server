@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\ApiOrderController;
 use App\Http\Controllers\Api\PartnerProviderController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BankAutoController;
+use App\Http\Controllers\Api\TransactionBankController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\Pay2sController;
 use App\Http\Controllers\Api\CategoryGroupController;
@@ -205,7 +206,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/affiliate/withdrawals/{id}/reject', [AffiliateController::class, 'reject']);
     Route::post('/admin/affiliate/users/{id}/commission-rate', [AffiliateController::class, 'setCommissionRate']);
 
+    // Admin Deposits & Webhook Logs
+    Route::get('/admin/deposits', [DepositController::class, 'adminIndex']);
+    Route::get('/admin/webhook-logs', [DepositController::class, 'webhookLogs']);
+
+    // Admin Transaction Banks (nạp tay từ GD ngân hàng raw)
+    Route::post('/admin/transaction-banks/{id}/manual-credit', [TransactionBankController::class, 'manualCredit']);
+
     // Admin Bank Auto
+    Route::post('/admin/bank-auto/{id}/manual-credit', [BankAutoController::class, 'manualCredit']);
     Route::get('/admin/bank-auto/{id}/logs', [BankAutoController::class, 'logs']);
     Route::post('/admin/bank-auto/{id}/approve', [BankAutoController::class, 'approve']);
     Route::post('/admin/bank-auto/{id}/reject', [BankAutoController::class, 'reject']);

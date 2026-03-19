@@ -92,6 +92,9 @@ class Dongtien extends Model
         array $options = []
     ): self {
         $amount = abs($amount); // Đảm bảo amount luôn dương
+
+        // Lock user row để tránh race condition khi 2 deposit xử lý đồng thời
+        $user = User::where('id', $user->id)->lockForUpdate()->first();
         $balanceBefore = (float) $user->balance;
 
         // Xác định cộng hay trừ dựa trên type

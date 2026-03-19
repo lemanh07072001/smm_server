@@ -25,6 +25,7 @@ class ExpireDeposits extends Command
         $records = BankAuto::where('status', 'pending')
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', now())
+            ->whereNotNull('transaction_code')
             ->get();
 
         foreach ($records as $record) {
@@ -40,7 +41,7 @@ class ExpireDeposits extends Command
                     'amount'       => $record->amount,
                     'bank_auto_id' => $record->id,
                     'deposit_code' => $record->transaction_code,
-                    'message'      => 'Giao dịch pending hết hạn, chuyển sang expired',
+                    'message'      => 'Hết hạn 10 phút',
                 ]);
             } catch (\Exception) {}
         }

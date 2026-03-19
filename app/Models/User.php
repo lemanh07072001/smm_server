@@ -39,6 +39,7 @@ class User extends Authenticatable
         'affiliate_balance',
         'affiliate_commission_rate',
         'deposit_code',
+        'total_deposited',
     ];
 
     /**

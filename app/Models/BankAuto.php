@@ -29,12 +29,14 @@ class BankAuto extends Model
         'payment_channel',
         'expires_at',
         'is_processed',
+        'processed_at',
     ];
 
     protected $casts = [
         'amount'       => 'integer',
         'expires_at'   => 'datetime',
         'is_processed' => 'boolean',
+        'processed_at' => 'datetime',
     ];
 
     public function user(): BelongsTo
