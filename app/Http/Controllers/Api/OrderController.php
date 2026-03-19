@@ -46,12 +46,25 @@ class OrderController extends Controller
                 'providerService:id,name,provider_service_code',
             ]);
 
-        // Search theo link, provider_order_id
+        $userSearch = $request->input('user_search');
+
+        // Search theo link, provider_order_id, user email/name
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('link', 'like', "%{$search}%")
                   ->orWhere('provider_order_id', 'like', "%{$search}%")
                   ->orWhere('id', $search);
+            });
+        }
+
+        // Filter theo user email hoặc tên
+        if ($userSearch) {
+            $query->whereHas('user', function ($q) use ($userSearch) {
+                $q->where('email', 'like', "%{$userSearch}%")
+                  ->orWhere('name', 'like', "%{$userSearch}%");
+                if (is_numeric($userSearch)) {
+                    $q->orWhere('id', (int) $userSearch);
+                }
             });
         }
 
@@ -75,6 +88,15 @@ class OrderController extends Controller
                 $q->where('link', 'like', "%{$search}%")
                   ->orWhere('provider_order_id', 'like', "%{$search}%")
                   ->orWhere('id', $search);
+            });
+        }
+        if ($userSearch) {
+            $countQuery->whereHas('user', function ($q) use ($userSearch) {
+                $q->where('email', 'like', "%{$userSearch}%")
+                  ->orWhere('name', 'like', "%{$userSearch}%");
+                if (is_numeric($userSearch)) {
+                    $q->orWhere('id', (int) $userSearch);
+                }
             });
         }
         if ($startDate) {

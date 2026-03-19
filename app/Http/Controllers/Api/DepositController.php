@@ -140,7 +140,12 @@ class DepositController extends Controller
                 $q->where('tid', 'like', "%{$search}%")
                   ->orWhere('description', 'like', "%{$search}%")
                   ->orWhere('transaction_code', 'like', "%{$search}%")
-                  ->orWhereHas('user', fn($u) => $u->where('email', 'like', "%{$search}%"));
+                  ->orWhereHas('user', fn($u) => $u->where('email', 'like', "%{$search}%")
+                                                    ->orWhere('name', 'like', "%{$search}%"));
+                if (is_numeric($search)) {
+                    $q->orWhere('user_id', (int) $search)
+                      ->orWhere('amount', (int) $search);
+                }
             });
         }
         if ($status && $status !== 'all')      $query->where('status', $status);
@@ -279,6 +284,85 @@ class DepositController extends Controller
 
         return response()->json([
             'data' => $deposit,
+        ]);
+    }
+
+    /**
+     * Tra cứu toàn bộ timeline của một TID.
+     * GET /api/admin/deposits/trace?tid={tid}
+     */
+    public function traceByTid(Request $request): JsonResponse
+    {
+        if (!$request->user() || !$request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $tid = trim($request->query('tid', ''));
+        if (!$tid) {
+            return response()->json(['success' => false, 'message' => 'Thiếu tham số tid'], 400);
+        }
+
+        // 1. TransactionBank (raw webhook)
+        $txn = \App\Models\TransactionBank::where('tid', $tid)->first();
+
+        // 2. BankAuto (lệnh nạp được match)
+        $bankAuto = \App\Models\BankAuto::where('tid', $tid)
+            ->orWhere('transaction_code', $tid)
+            ->with('user:id,name,email,balance')
+            ->first();
+
+        // Nếu không tìm theo tid thì thử tìm TransactionBank qua bank_auto_id
+        if (!$bankAuto && $txn?->bank_auto_id) {
+            $bankAuto = \App\Models\BankAuto::where('id', $txn->bank_auto_id)
+                ->with('user:id,name,email,balance')
+                ->first();
+        }
+
+        // 3. Dongtien (đã cộng tiền chưa)
+        $dongtien = null;
+        if ($bankAuto) {
+            $dongtien = \App\Models\Dongtien::where('bank_auto_id', $bankAuto->id)
+                ->select('id', 'user_id', 'amount', 'balance_before', 'balance_after', 'type', 'noidung', 'thoigian', 'created_at')
+                ->first();
+        }
+
+        // 4. Deposit logs (MongoDB)
+        $logs = collect();
+        try {
+            $query = \App\Models\DepositLog::where(function ($q) use ($tid, $bankAuto) {
+                $q->where('tid', $tid);
+                if ($bankAuto) {
+                    $q->orWhere('bank_auto_id', $bankAuto->id);
+                }
+            })->orderBy('created_at', 'asc')->get();
+            $logs = $query;
+        } catch (\Exception $e) {
+            // MongoDB unavailable
+        }
+
+        $found = $txn || $bankAuto || $logs->isNotEmpty();
+
+        return response()->json([
+            'success'      => true,
+            'tid'          => $tid,
+            'found'        => $found,
+            'transaction_bank' => $txn,
+            'bank_auto'    => $bankAuto,
+            'dongtien'     => $dongtien,
+            'logs'         => $logs->map(fn($l) => [
+                'step'         => $l->step,
+                'status'       => $l->status,
+                'source'       => $l->source,
+                'tid'          => $l->tid,
+                'user_id'      => $l->user_id,
+                'amount'       => $l->amount,
+                'bank_auto_id' => $l->bank_auto_id,
+                'deposit_code' => $l->deposit_code,
+                'message'      => $l->message,
+                'context'      => $l->context,
+                'raw_payload'  => $l->raw_payload,
+                'created_at'   => $l->created_at,
+            ])->values(),
         ]);
     }
 }

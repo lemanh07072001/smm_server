@@ -302,6 +302,11 @@ class DepositService
 
             $newBalance = $user->fresh()->balance;
 
+            // Mark TransactionBank is_processed=true sau commit (ngoài transaction)
+            TransactionBank::where('tid', $transactionId)
+                ->where('is_processed', false)
+                ->update(['is_processed' => true, 'bank_auto_id' => $bankAuto->id]);
+
             // Telegram notification sau commit
             try {
                 $amountFormatted = number_format($amount, 0, ',', '.');
@@ -613,10 +618,11 @@ class DepositService
                     'deposit_type'     => 'manual',
                     'payment_channel'  => 'bank',
                     'transaction_code' => $txnCode,
+                    'description'      => $adminNote,
+                    'date'             => now()->format('Y-m-d H:i:s'),
                     'status'           => self::STATUS_PENDING,
                     'note'             => $adminNote,
                     'is_processed'     => false,
-                    'date'             => now()->format('Y-m-d H:i:s'),
                 ]);
             }
 

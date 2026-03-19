@@ -34,7 +34,7 @@ class ExpireDeposits extends Command
             try {
                 DepositLog::create([
                     'step'         => 'mark_expired',
-                    'status'       => 'warning',
+                    'status'       => 'expired',
                     'source'       => 'system',
                     'tid'          => $record->tid,
                     'user_id'      => $record->user_id,

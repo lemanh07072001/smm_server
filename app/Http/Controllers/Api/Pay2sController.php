@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\DepositLog;
+use App\Models\TransactionBank;
 use App\Models\Setting;
 use App\Services\DepositService;
 use Illuminate\Http\JsonResponse;
@@ -126,6 +127,22 @@ class Pay2sController extends Controller
 
         // Bước 4: Tạo transaction ID nội bộ
         $transactionId = (string) $pay2sId;
+
+        // Lưu TransactionBank (raw GD ngân hàng) — bằng chứng webhook đã đến
+        $transactionBank = TransactionBank::firstOrCreate(
+            ['tid' => $transactionId],
+            [
+                'source'        => 'pay2s',
+                'transfer_type' => strtoupper($transaction['transferType'] ?? 'IN'),
+                'amount'        => $amount,
+                'content'       => $content,
+                'account_number'=> $transaction['accountNumber'] ?? null,
+                'bank_code'     => $transaction['gateway'] ?? null,
+                'transacted_at' => $transactionDate,
+                'is_processed'  => false,
+                'raw_data'      => $transaction,
+            ]
+        );
 
         // Bước 4.5: Dedup tầng 1 — kiểm tra is_processed trước khi xử lý
         // Dùng atomic UPDATE WHERE is_processed=false → trả về số rows affected

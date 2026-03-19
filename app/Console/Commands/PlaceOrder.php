@@ -627,6 +627,7 @@ class PlaceOrder extends Command
                                 $refund['note'],
                                 ['order_id' => $refund['order_id']]
                             );
+                            OrderActivityLogger::for($refund['order_id'])->user($userId)->refund($refund['amount']);
                             $this->info("  Order #{$refund['order_id']}: Hoàn {$refund['amount']} cho user #{$userId} ({$newStatus})");
                         }
 
@@ -657,21 +658,28 @@ class PlaceOrder extends Command
      */
     protected function callProviderApi(Order $order): array
     {
+        $logger = OrderActivityLogger::for($order->id)->user($order->user_id);
+
         try {
-            $service = $order->service;
+            $service  = $order->service;
             $provider = $service->providerService->provider ?? null;
 
             if (!$provider) {
+                $logger->error('Provider không tồn tại');
                 return ['success' => false, 'error' => 'Provider không tồn tại'];
             }
 
             if (!ProviderFactory::isSupported($provider->code)) {
+                $logger->error("Provider không được hỗ trợ: {$provider->code}");
                 return ['success' => false, 'error' => "Provider không được hỗ trợ: {$provider->code}"];
             }
 
             if (!$provider->is_active) {
+                $logger->error("Provider [{$provider->code}] đang bị tắt bởi Super Admin.");
                 return ['success' => false, 'error' => "Provider [{$provider->code}] đang bị tắt bởi Super Admin.", 'skip_retry' => true];
             }
+
+            $logger->provider($provider->code)->processingStarted();
 
             $providerService = ProviderFactory::make($provider);
 
@@ -688,15 +696,30 @@ class PlaceOrder extends Command
                 $validated['comments'] = $order->comments;
             }
 
-            $response = $providerService->sendRequest($service, $validated);
+            $logger->provider($provider->code)->providerRequest(
+                $provider->api_url . '/add',
+                array_merge($validated, ['service' => $service->providerService->provider_service_code ?? ''])
+            );
+
+            $startTime  = microtime(true);
+            $response   = $providerService->sendRequest($service, $validated);
+            $durationMs = (int) ((microtime(true) - $startTime) * 1000);
+
+            $logger->provider($provider->code)->providerResponse($response, $durationMs);
 
             if (!$providerService->isSuccessResponse($response)) {
-                $data = $response['data'] ?? [];
+                $data     = $response['data'] ?? [];
                 $errorMsg = $data['error'] ?? $response['body'] ?? 'Unknown error';
+                $logger->provider($provider->code)->orderFailed($errorMsg);
                 return ['success' => false, 'error' => $errorMsg];
             }
 
             $providerOrderId = $providerService->getOrderIdFromResponse($response);
+
+            $logger->provider($provider->code, $providerOrderId)->orderPlacedSuccess(
+                $providerOrderId,
+                Order::STATUS_IN_PROGRESS
+            );
 
             // Lấy status ngay sau khi tạo thành công
             $statusData = $this->fetchProviderStatus($providerService, $providerOrderId);
@@ -705,8 +728,10 @@ class PlaceOrder extends Command
                 'success'           => true,
                 'provider_order_id' => $providerOrderId,
                 'status_data'       => $statusData,
+                'provider_code'     => $provider->code,
             ];
         } catch (\Exception $e) {
+            $logger->error($e->getMessage(), $e);
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -735,7 +760,8 @@ class PlaceOrder extends Command
     protected function applySuccessUpdate(Order $order, array $result): void
     {
         $providerOrderId = $result['provider_order_id'];
-        $statusData = $result['status_data'] ?? null;
+        $statusData      = $result['status_data'] ?? null;
+        $providerCode    = $result['provider_code'] ?? null;
 
         $updateData = [
             'provider_order_id' => $providerOrderId,
@@ -752,6 +778,12 @@ class PlaceOrder extends Command
         }
 
         $order->update($updateData);
+
+        $logger = OrderActivityLogger::for($order->id)->user($order->user_id);
+        if ($providerCode) {
+            $logger->provider($providerCode, $providerOrderId);
+        }
+        $logger->orderUpdated($updateData);
     }
 
     /**
@@ -819,6 +851,8 @@ class PlaceOrder extends Command
                 'refund_amount' => $refundAmount,
             ]);
 
+            OrderActivityLogger::for($order->id)->user($order->user_id)->orderFailed($errorMessage);
+
             // Hoàn tiền cho user
             if ($refundAmount > 0) {
                 $user = User::lockForUpdate()->find($order->user_id);
@@ -830,6 +864,7 @@ class PlaceOrder extends Command
                         "Hoàn tiền đơn hàng #{$order->id} thất bại",
                         ['order_id' => $order->id]
                     );
+                    OrderActivityLogger::for($order->id)->user($order->user_id)->refund($refundAmount);
                     $this->info("Order #{$order->id}: Đã hoàn tiền {$refundAmount} cho user #{$user->id}");
                 }
             }
