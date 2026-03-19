@@ -179,7 +179,7 @@ class PlaceOrder extends Command
 
     protected function runHandleScan()
     {
-        $this->info('Bắt đầu quét orders STATUS_PENDING...');
+        $this->info('[' . now()->format('H:i:s') . '] Bắt đầu quét orders STATUS_PENDING...');
 
         // priority=0 được Controller push ngay → cutoff 2 phút để tránh race
         // order thường chỉ do scan push → không cần cutoff nhưng giữ chung cho đơn giản
