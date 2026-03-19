@@ -121,8 +121,15 @@ class PlaceOrder extends Command
                     Log::info("PlaceOrder ADD: #{$order->id} -> ID: {$result['provider_order_id']}");
                     RedisHelper::del($lockKey);
                 } elseif (!empty($result['skip_retry'])) {
-                    // Provider bị tắt tạm → giữ pending, scan sẽ push lại sau
-                    $this->warn("Order #{$order->id}: Provider bị tắt → giữ pending.");
+                    if (!empty($result['keep_pending'])) {
+                        // Provider bị tắt tạm → giữ pending, scan sẽ push lại sau
+                        $this->warn("Order #{$order->id}: Provider bị tắt → giữ pending.");
+                    } else {
+                        // Lỗi từ service provider (maintenance, invalid,...) → fail ngay, hoàn tiền
+                        $this->applyFailedUpdate($order, $result['error'], $order->retry_count ?? 0);
+                        $this->error("Order #{$order->id}: FAILED (skip retry) -> {$result['error']}");
+                        Log::error("PlaceOrder ADD: #{$order->id} -> FAILED (skip retry) -> {$result['error']}");
+                    }
                     RedisHelper::del($lockKey);
                 } else {
                     $currentRetry = $order->retry_count ?? 0;
@@ -677,7 +684,7 @@ class PlaceOrder extends Command
 
             if (!$provider->is_active) {
                 $logger->error("Provider [{$provider->code}] đang bị tắt bởi Super Admin.");
-                return ['success' => false, 'error' => "Provider [{$provider->code}] đang bị tắt bởi Super Admin.", 'skip_retry' => true];
+                return ['success' => false, 'error' => "Provider [{$provider->code}] đang bị tắt bởi Super Admin.", 'skip_retry' => true, 'keep_pending' => true];
             }
 
             $logger->provider($provider->code)->processingStarted();
@@ -712,7 +719,14 @@ class PlaceOrder extends Command
                 $data     = $response['data'] ?? [];
                 $errorMsg = $data['error'] ?? $response['body'] ?? 'Unknown error';
                 $logger->provider($provider->code)->orderFailed($errorMsg);
-                return ['success' => false, 'error' => $errorMsg];
+
+                // Một số lỗi retry cũng vô nghĩa → skip retry, fail ngay
+                $skipRetryKeywords = ['maintenance', 'invalid service', 'service not found', 'service is disabled'];
+                $isSkipRetry = collect($skipRetryKeywords)->contains(
+                    fn($kw) => str_contains(strtolower($errorMsg), $kw)
+                );
+
+                return ['success' => false, 'error' => $errorMsg, 'skip_retry' => $isSkipRetry];
             }
 
             $providerOrderId = $providerService->getOrderIdFromResponse($response);
