@@ -848,6 +848,7 @@ class PlaceOrder extends Command
             $order->update([
                 'status'        => Order::STATUS_FAILED,
                 'note'          => $errorMessage,
+                'error_message' => $errorMessage,
                 'retry_count'   => $retryCount,
                 'refund_amount' => $refundAmount,
             ]);
