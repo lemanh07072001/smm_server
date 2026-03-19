@@ -263,7 +263,7 @@ class PlaceOrder extends Command
             $flushChunk(array_values($chunkBuffer));
         }
 
-        $this->info("Hoàn thành! Pushed: {$pushed}, Skipped (đang xử lý): {$skipped}");
+        $this->info('[' . now()->format('H:i:s') . "] Hoàn thành! Pushed: {$pushed}, Skipped (đang xử lý): {$skipped}");
     }
 
     /**
