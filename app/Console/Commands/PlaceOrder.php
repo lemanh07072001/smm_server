@@ -174,6 +174,11 @@ class PlaceOrder extends Command
      */
     protected function handleScan()
     {
+        return $this->runHandleScan();
+    }
+
+    protected function runHandleScan()
+    {
         $this->info('Bắt đầu quét orders STATUS_PENDING...');
 
         // priority=0 được Controller push ngay → cutoff 2 phút để tránh race
@@ -259,7 +264,6 @@ class PlaceOrder extends Command
         }
 
         $this->info("Hoàn thành! Pushed: {$pushed}, Skipped (đang xử lý): {$skipped}");
-        return 0;
     }
 
     /**
