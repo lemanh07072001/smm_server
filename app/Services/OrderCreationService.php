@@ -190,13 +190,21 @@ class OrderCreationService
     public function pushOrderToQueue(Order $order): void
     {
         try {
-            // Order thường: không push ngay, để scan mỗi phút tự pick up → tránh duplicate queue
-            // Order priority=0 (VIP): push ngay lên đầu queue để xử lý tức thì
-            if ($order->is_priority != Order::PRIORITY[0]) {
-                return;
-            }
             $orderData = json_encode(['id' => $order->id]);
-            RedisHelper::lpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, $orderData);
+
+            if ($order->is_priority == Order::PRIORITY[0]) {
+                // VIP: push lên đầu queue priority để xử lý tức thì
+                RedisHelper::lpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, $orderData);
+            } else {
+                // Thường: push vào cuối queue
+                RedisHelper::rpush(Order::KEY_ID_REDIS_ORDER_PRIORITY_0, $orderData);
+            }
+
+            // Đánh dấu để scan bỏ qua, tránh push trùng (TTL 5 phút)
+            \Illuminate\Support\Facades\Redis::pipeline(function ($pipe) use ($order) {
+                $pipe->setex('scan_queued:order:' . $order->id, 120, 1);
+            });
+
             OrderActivityLogger::for($order->id)->user($order->user_id)->orderQueued();
         } catch (\Exception $e) {
             Log::warning('OrderCreationService: failed to push order to queue', [
