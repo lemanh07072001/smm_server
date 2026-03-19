@@ -268,6 +268,23 @@ class PlaceOrder extends Command
      */
     protected function handleStatus()
     {
+        $lockKey = 'place_order:status_running';
+        $locked  = RedisHelper::acquireLock($lockKey, getmypid(), 120);
+
+        if (!$locked) {
+            $this->warn('handleStatus đang chạy ở process khác, bỏ qua lần này.');
+            return 0;
+        }
+
+        try {
+            return $this->runHandleStatus();
+        } finally {
+            RedisHelper::del($lockKey);
+        }
+    }
+
+    protected function runHandleStatus()
+    {
         $this->info('Bắt đầu kiểm tra trạng thái orders...');
 
         $chunkSize = 500;
@@ -445,9 +462,12 @@ class PlaceOrder extends Command
                                 $mappedStatus = $providerService->mapProviderStatus($statusData['status']);
                                 $updateData['status'] = $mappedStatus;
                                 $this->line("  Order #{$order->id} | provider_id: {$providerOrderId} | raw: '{$statusData['status']}' → mapped: '{$mappedStatus}'");
-                                OrderActivityLogger::for($order->id)
-                                    ->provider($provider->code, $providerOrderId)
-                                    ->statusResponse($statusData);
+                                // Chỉ ghi log khi status thay đổi
+                                if ($mappedStatus !== $order->status) {
+                                    OrderActivityLogger::for($order->id)
+                                        ->provider($provider->code, $providerOrderId)
+                                        ->statusResponse($statusData);
+                                }
                             }
                             // Lỗi per-order từ provider (vd: "Incorrect order id")
                             if (!empty($statusData['error'])) {

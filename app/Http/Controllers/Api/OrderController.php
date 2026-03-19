@@ -38,7 +38,7 @@ class OrderController extends Controller
                 'provider_order_id', 'link', 'quantity', 'status',
                 'charge_amount', 'cost_amount', 'profit_amount',
                 'start_count', 'remains', 'error_message',
-                'created_at', 'updated_at'
+                'created_at', 'updated_at', 'completed_at'
             ])
             ->with([
                 'user:id,name,email',
@@ -127,7 +127,7 @@ class OrderController extends Controller
         ];
 
         // Phân trang - orderBy id nhanh hơn created_at
-        $perPage = min((int) $request->get('per_page', 6), 100);
+        $perPage = min((int) $request->get('per_page', 20), 100);
         $orders = $query->orderBy('id', 'desc')->paginate($perPage);
 
         return response()->json([
@@ -154,14 +154,14 @@ class OrderController extends Controller
 
         $search = $request->input('search');
         $status = $request->input('status');
-        $perPage = min((int) $request->input('per_page', 7), 100);
+        $perPage = min((int) $request->input('per_page', 20), 100);
 
         // Query orders của user - chỉ select cột cần thiết
         $query = Order::select([
                 'id', 'user_id', 'service_id', 'provider_service_id',
                 'provider_order_id', 'link', 'quantity', 'status',
                 'charge_amount', 'start_count', 'remains',
-                'created_at', 'updated_at'
+                'created_at', 'updated_at', 'completed_at'
             ])
             ->with(['service:id,name,sell_rate'])
             ->where('user_id', $userId);
