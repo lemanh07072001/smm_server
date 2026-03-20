@@ -154,6 +154,7 @@ class OrderController extends Controller
 
         $search = $request->input('search');
         $status = $request->input('status');
+        $platform = $request->input('platform');
         $perPage = min((int) $request->input('per_page', 20), 100);
 
         // Query orders của user - chỉ select cột cần thiết
@@ -169,6 +170,11 @@ class OrderController extends Controller
         // Filter theo status (nếu status là "all" thì lấy tất cả)
         if ($status !== null && $status !== 'all') {
             $query->where('status', $status);
+        }
+
+        // Filter theo platform
+        if ($platform) {
+            $query->whereHas('service', fn($s) => $s->where('platform', $platform));
         }
 
         // Tìm kiếm theo id, link, provider_order_id, tên dịch vụ

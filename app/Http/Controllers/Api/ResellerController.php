@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\PartnerProvider;
 use App\Models\Provider;
 use App\Models\ResellerProviderPermission;
 use App\Models\Service;
@@ -95,6 +96,15 @@ class ResellerController extends Controller
             ], 404);
         }
 
+        // Kiểm tra ở cấp hệ thống (superadmin có cho phép provider này không)
+        $partnerProvider = PartnerProvider::where('code', $provider->code)->first();
+        if (!$partnerProvider || !$partnerProvider->is_allowed) {
+            return response()->json([
+                'allowed' => false,
+                'message' => 'Nhà cung cấp này không được hỗ trợ trên hệ thống. Vui lòng liên hệ admin.',
+            ], 403);
+        }
+
         if (!$provider->is_active) {
             return response()->json([
                 'allowed' => false,
@@ -148,8 +158,20 @@ class ResellerController extends Controller
         }
         $service = $result['service'];
 
-        // Kiểm tra permission provider (cache 10 phút để không query DB mỗi request)
+        // Kiểm tra ở cấp hệ thống: PartnerProvider có is_allowed không
         $provider = $service->providerService->provider;
+        $partnerAllowed = \Illuminate\Support\Facades\Cache::remember(
+            "partner_provider_allowed_{$provider->code}", 300,
+            fn() => PartnerProvider::where('code', $provider->code)->value('is_allowed')
+        );
+
+        if (!$partnerAllowed) {
+            return response()->json([
+                'message' => "Nhà cung cấp [{$provider->name}] không được hỗ trợ trên hệ thống. Vui lòng liên hệ admin.",
+            ], 403);
+        }
+
+        // Kiểm tra permission cấp user (cache 10 phút)
         $cacheKey = "reseller_permission_{$user->id}_{$provider->id}";
         $allowed = \Illuminate\Support\Facades\Cache::remember($cacheKey, 600, function () use ($user, $provider) {
             return $user->canUseProvider($provider->id);
@@ -157,7 +179,7 @@ class ResellerController extends Controller
 
         if (!$allowed) {
             return response()->json([
-                'message' => 'Dịch vụ này không được hỗ trợ, vui lòng liên hệ admin.',
+                'message' => "Bạn không có quyền dùng nhà cung cấp [{$provider->name}]. Vui lòng liên hệ admin.",
             ], 403);
         }
 
