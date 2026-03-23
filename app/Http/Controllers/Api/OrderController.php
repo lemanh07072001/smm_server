@@ -172,9 +172,9 @@ class OrderController extends Controller
             $query->where('status', $status);
         }
 
-        // Filter theo platform
+        // Filter theo platform (group_id của category group, ví dụ: fb_comment, tiktok...)
         if ($platform) {
-            $query->whereHas('service', fn($s) => $s->where('platform', $platform));
+            $query->whereHas('service', fn($s) => $s->where('group_id', $platform));
         }
 
         // Tìm kiếm theo id, link, provider_order_id, tên dịch vụ
