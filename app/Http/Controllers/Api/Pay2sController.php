@@ -128,6 +128,8 @@ class Pay2sController extends Controller
         // Bước 4: Tạo transaction ID nội bộ
         $transactionId = (string) $pay2sId;
 
+logger($transaction);
+
         // Lưu TransactionBank (raw GD ngân hàng) — bằng chứng webhook đã đến
         $transactionBank = TransactionBank::firstOrCreate(
             ['tid' => $transactionId],
