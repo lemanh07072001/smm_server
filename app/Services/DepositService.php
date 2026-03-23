@@ -701,15 +701,13 @@ class DepositService
                 return ['success' => false, 'message' => "Giao dịch tid={$tid} đã xử lý"];
             }
 
-            // Bước 4: Cộng tiền
+            // Bước 4: Cộng tiền — giữ nguyên deposit_type gốc (auto nếu từ webhook, manual nếu admin tạo)
             $bankAuto->update([
-                'status'          => self::STATUS_SUCCESS,
-                'tid'             => $tid,
-                'deposit_type'    => 'manual',
-                'payment_channel' => 'bank',
-                'note'            => $adminNote,
-                'is_processed'    => true,
-                'expires_at'      => null,
+                'status'       => self::STATUS_SUCCESS,
+                'tid'          => $tid,
+                'note'         => $adminNote,
+                'is_processed' => true,
+                'expires_at'   => null,
             ]);
 
             $dongtien = Dongtien::createTransaction(
