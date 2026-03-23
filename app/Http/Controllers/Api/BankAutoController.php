@@ -134,7 +134,17 @@ class BankAutoController extends Controller
 
         $request->validate([
             'admin_note' => 'nullable|string|max:500',
+            'user_id'    => 'nullable|integer|exists:users,id',
         ]);
+
+        // Nếu GD không có user, admin phải truyền user_id
+        if (!$bankAuto->user_id) {
+            if (!$request->input('user_id')) {
+                return response()->json(['success' => false, 'message' => 'Giao dịch chưa có user, vui lòng chọn user để cộng tiền'], 400);
+            }
+            $bankAuto->update(['user_id' => $request->input('user_id')]);
+            $bankAuto->refresh();
+        }
 
         $result = $this->depositService->manualCredit(
             $bankAuto,
