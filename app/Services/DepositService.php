@@ -133,7 +133,19 @@ class DepositService
             $user = User::find($userId);
             if (!$user) {
                 DB::rollBack();
-                return ['success' => false, 'message' => 'User không tồn tại'];
+
+                $bankAuto = $this->savePendingDeposit(
+                    $transactionId,
+                    $description,
+                    $time,
+                    $amount,
+                    $rawData,
+                    $source
+                );
+
+                $bankAuto->update(['note' => "User #{$userId} không tồn tại trong hệ thống, chờ admin xử lý"]);
+
+                return ['success' => false, 'message' => "User #{$userId} không tồn tại, lưu chờ admin xử lý"];
             }
 
             // 2. Chỉ tìm bản ghi PENDING — webhook đến sau khi expired không tự cộng, nhờ Admin xử lý
@@ -225,7 +237,52 @@ class DepositService
                 $logData = ['bank_auto_id' => $bankAuto->id, 'message' => 'Amount khớp, cập nhật pending → success'];
 
             } else {
-                // Không có pending → lưu chờ admin duyệt, KHÔNG cộng tiền
+                // Không có pending → kiểm tra xem tiền đã được cộng qua GD khác chưa
+                $recentSuccess = BankAuto::where('user_id', $userId)
+                    ->where('status', self::STATUS_SUCCESS)
+                    ->where('amount', $amount)
+                    ->where('created_at', '>=', now()->subHours(24))
+                    ->latest()
+                    ->first();
+
+                if ($recentSuccess) {
+                    // Tiền đã cộng rồi qua GD khác → tự động hủy, không cần admin
+                    $bankAuto = BankAuto::create([
+                        'tid'              => $transactionId,
+                        'transaction_code' => $transactionCode,
+                        'description'      => $description,
+                        'date'             => $time ?? now()->format('Y-m-d H:i:s'),
+                        'data'             => json_encode($rawData),
+                        'amount'           => $amount,
+                        'type'             => 'bank',
+                        'deposit_type'     => $depositType,
+                        'payment_channel'  => $paymentChannel,
+                        'user_id'          => $userId,
+                        'status'           => 'cancelled',
+                        'note'             => "Tự động hủy: tiền đã được cộng qua GD #{$recentSuccess->id} (tid: {$recentSuccess->tid})",
+                    ]);
+
+                    DB::commit();
+
+                    $this->mlog('auto_cancelled_duplicate', 'warning', [
+                        'source'            => $source,
+                        'tid'               => $transactionId,
+                        'user_id'           => $userId,
+                        'amount'            => $amount,
+                        'bank_auto_id'      => $bankAuto->id,
+                        'success_record_id' => $recentSuccess->id,
+                        'deposit_code'      => $transactionCode,
+                        'raw_payload'       => $rawData,
+                        'message'           => "Tự động hủy: tiền đã cộng qua GD #{$recentSuccess->id}, không cần admin duyệt",
+                    ]);
+
+                    return [
+                        'success' => false,
+                        'message' => 'Tiền đã được cộng trước đó, tự động hủy giao dịch trùng',
+                    ];
+                }
+
+                // Chưa có GD success gần đây → lưu chờ admin duyệt
                 $bankAuto = BankAuto::create([
                     'tid'              => $transactionId,
                     'transaction_code' => $transactionCode,
