@@ -212,6 +212,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/webhook-logs', [DepositController::class, 'webhookLogs']);
 
     // Admin Transaction Banks (nạp tay từ GD ngân hàng raw)
+    Route::get('/admin/transaction-banks', [TransactionBankController::class, 'index']);
     Route::post('/admin/transaction-banks/{id}/manual-credit', [TransactionBankController::class, 'manualCredit']);
 
     // Admin Bank Auto

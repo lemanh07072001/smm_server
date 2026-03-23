@@ -13,6 +13,53 @@ class TransactionBankController extends Controller
     public function __construct(private DepositService $depositService) {}
 
     /**
+     * Danh sách transaction_banks cho admin.
+     * GET /api/admin/transaction-banks
+     */
+    public function index(Request $request): JsonResponse
+    {
+        if (!$request->user()?->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $query = TransactionBank::orderBy('created_at', 'desc');
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('tid', 'like', "%{$search}%")
+                  ->orWhere('content', 'like', "%{$search}%")
+                  ->orWhere('account_number', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('source') && $request->input('source') !== 'all') {
+            $query->where('source', $request->input('source'));
+        }
+
+        if ($request->filled('is_processed') && $request->input('is_processed') !== 'all') {
+            $query->where('is_processed', $request->boolean('is_processed'));
+        }
+
+        if ($request->filled('start_date')) {
+            $query->whereDate('created_at', '>=', $request->input('start_date'));
+        }
+
+        if ($request->filled('end_date')) {
+            $query->whereDate('created_at', '<=', $request->input('end_date'));
+        }
+
+        $perPage = (int) $request->input('per_page', 20);
+        $result  = $query->paginate($perPage);
+
+        return response()->json([
+            'data'      => $result->items(),
+            'total'     => $result->total(),
+            'last_page' => $result->lastPage(),
+        ]);
+    }
+
+    /**
      * Admin cộng tiền thủ công từ TransactionBank.
      * POST /api/admin/transaction-banks/{id}/manual-credit
      *
