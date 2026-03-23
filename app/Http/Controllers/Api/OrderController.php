@@ -69,7 +69,7 @@ class OrderController extends Controller
         }
 
         // Filter theo status
-        if ($status !== null) {
+        if ($status !== null && $status !== 'all') {
             $query->where('status', $status);
         }
 
