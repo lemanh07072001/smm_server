@@ -215,6 +215,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/transaction-banks/{id}/manual-credit', [TransactionBankController::class, 'manualCredit']);
 
     // Admin Bank Auto
+    Route::post('/admin/bank-auto/{id}/cancel', [BankAutoController::class, 'cancel']);
     Route::post('/admin/bank-auto/{id}/manual-credit', [BankAutoController::class, 'manualCredit']);
     Route::get('/admin/bank-auto/{id}/logs', [BankAutoController::class, 'logs']);
     Route::post('/admin/bank-auto/{id}/approve', [BankAutoController::class, 'approve']);

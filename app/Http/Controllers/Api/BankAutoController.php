@@ -200,6 +200,30 @@ class BankAutoController extends Controller
     }
 
     /**
+     * Admin hủy giao dịch — bao gồm cả GD không có user (user_id = null)
+     * POST /api/admin/bank-auto/{id}/cancel
+     */
+    public function cancel(Request $request, int $id): JsonResponse
+    {
+        if (!$request->user() || !$request->user()->isAdmin()) {
+            return response()->json(['success' => false, 'message' => 'Unauthorized'], 403);
+        }
+
+        $bankAuto = BankAuto::find($id);
+        if (!$bankAuto) {
+            return response()->json(['success' => false, 'message' => 'Không tìm thấy giao dịch'], 404);
+        }
+
+        if (!in_array($bankAuto->status, ['pending', 'pending_duplicate'])) {
+            return response()->json(['success' => false, 'message' => 'Chỉ có thể hủy giao dịch đang chờ xử lý'], 400);
+        }
+
+        $bankAuto->update(['status' => 'cancelled']);
+
+        return response()->json(['success' => true, 'message' => 'Đã hủy giao dịch']);
+    }
+
+    /**
      * Admin từ chối giao dịch pending_duplicate hoặc pending
      * POST /api/admin/bank-auto/{id}/reject
      */
