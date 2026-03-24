@@ -157,7 +157,7 @@ class OrderController extends Controller
         $platform = $request->input('platform');
         $dateFrom = $request->input('date_from');
         $dateTo = $request->input('date_to');
-        $perPage = min((int) $request->input('per_page', 20), 100);
+        $perPage = min((int) $request->input('per_page', 10), 500);
 
         // Query orders của user - chỉ select cột cần thiết
         $query = Order::select([
