@@ -50,11 +50,22 @@ class OrderController extends Controller
 
         // Search theo link, provider_order_id, user email/name
         if ($search) {
-            $query->where(function ($q) use ($search) {
-                $q->where('link', 'like', "%{$search}%")
-                  ->orWhere('provider_order_id', 'like', "%{$search}%")
-                  ->orWhere('id', $search);
-            });
+            $ids = collect(preg_split('/[\s,;]+/', trim($search)))
+                ->map(fn($v) => trim($v))
+                ->filter(fn($v) => is_numeric($v))
+                ->map(fn($v) => (int)$v)
+                ->values()
+                ->all();
+
+            if (count($ids) > 1) {
+                $query->whereIn('id', $ids);
+            } else {
+                $query->where(function ($q) use ($search, $ids) {
+                    $q->where('link', 'like', "%{$search}%")
+                      ->orWhere('provider_order_id', 'like', "%{$search}%")
+                      ->orWhere('id', !empty($ids) ? $ids[0] : -1);
+                });
+            }
         }
 
         // Filter theo user email hoặc tên
@@ -84,11 +95,22 @@ class OrderController extends Controller
         // Thống kê số lượng từng trạng thái theo cùng filter (search/date), 1 query duy nhất
         $countQuery = Order::query();
         if ($search) {
-            $countQuery->where(function ($q) use ($search) {
-                $q->where('link', 'like', "%{$search}%")
-                  ->orWhere('provider_order_id', 'like', "%{$search}%")
-                  ->orWhere('id', $search);
-            });
+            $ids = collect(preg_split('/[\s,;]+/', trim($search)))
+                ->map(fn($v) => trim($v))
+                ->filter(fn($v) => is_numeric($v))
+                ->map(fn($v) => (int)$v)
+                ->values()
+                ->all();
+
+            if (count($ids) > 1) {
+                $countQuery->whereIn('id', $ids);
+            } else {
+                $countQuery->where(function ($q) use ($search, $ids) {
+                    $q->where('link', 'like', "%{$search}%")
+                      ->orWhere('provider_order_id', 'like', "%{$search}%")
+                      ->orWhere('id', !empty($ids) ? $ids[0] : -1);
+                });
+            }
         }
         if ($userSearch) {
             $countQuery->whereHas('user', function ($q) use ($userSearch) {
