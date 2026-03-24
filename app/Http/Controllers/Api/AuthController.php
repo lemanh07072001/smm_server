@@ -257,6 +257,13 @@ class AuthController extends Controller
     {
         $user = User::where('email', $request->email)->first();
 
+        // Không lộ email có tồn tại hay không — luôn trả cùng message
+        if (!$user) {
+            return response()->json([
+                'message' => 'Link đặt lại mật khẩu đã được gửi đến email của bạn.',
+            ]);
+        }
+
         // Delete old tokens for this email
         DB::table('password_reset_tokens')->where('email', $request->email)->delete();
 

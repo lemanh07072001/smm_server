@@ -22,67 +22,95 @@ abstract class BaseProvider implements ProviderInterface
      */
     public function sendRequest(Service $service, array $validated): array
     {
-        $url = $this->buildApiUrl();
+        $url  = $this->buildApiUrl();
         $body = $this->buildAddOrderBody($service, $validated);
 
+        $safeBody = $body;
+        if (isset($safeBody['key'])) {
+            $safeBody['key'] = '****' . substr($safeBody['key'], -4);
+        }
 
         Log::debug('Provider API Request', [
             'provider' => $this->provider->code,
             'url'      => $url,
-            'body'     => $body,
+            'body'     => $safeBody,
         ]);
 
-        try {
-            $response = Http::timeout(30)->asForm()->post($url, $body);
+        return $this->sendWithRetry($url, $body, 'add_order');
+    }
 
-            Log::debug('Provider API Raw Response', [
-                'provider'    => $this->provider->code,
-                'status_code' => $response->status(),
-                'raw_body'    => $response->body(),
-            ]);
+    protected function sendWithRetry(string $url, array $body, string $context, int $maxRetries = 2, int $timeoutSeconds = 30): array
+    {
+        $lastException = null;
 
-            $result = [
-                'success'       => $response->successful(),
-                'status_code'   => $response->status(),
-                'body'          => $response->body(),
-                'data'          => $response->json() ?? [],
-            ];
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                $response = Http::timeout($timeoutSeconds)->asForm()->post($url, $body);
 
-            // Log error nếu API trả về lỗi
-            if (!$response->successful() || isset($result['data']['error'])) {
-                Log::error('Provider API Failed', [
-                    'provider'      => $this->provider->code,
-                    'status_code'   => $result['status_code'],
-                    'error'         => $result['data']['error'] ?? $result['body'],
-                    'data'          => $result['data'],
+                Log::debug('Provider API Raw Response', [
+                    'provider'    => $this->provider->code,
+                    'context'     => $context,
+                    'attempt'     => $attempt,
+                    'status_code' => $response->status(),
+                    'raw_body'    => $response->body(),
+                ]);
+
+                $result = [
+                    'success'     => $response->successful(),
+                    'status_code' => $response->status(),
+                    'body'        => $response->body(),
+                    'data'        => $response->json() ?? [],
+                ];
+
+                if (!$response->successful() || isset($result['data']['error'])) {
+                    Log::error('Provider API Failed', [
+                        'provider'    => $this->provider->code,
+                        'context'     => $context,
+                        'attempt'     => $attempt,
+                        'status_code' => $result['status_code'],
+                        'error'       => $result['data']['error'] ?? $result['body'],
+                    ]);
+
+                    return array_merge($result, ['type' => 'ERROR_PROVIDER']);
+                }
+
+                return $result;
+
+            } catch (\Illuminate\Http\Client\ConnectionException $e) {
+                $lastException = $e;
+                Log::warning('Provider API timeout, retrying', [
+                    'provider' => $this->provider->code,
+                    'context'  => $context,
+                    'attempt'  => $attempt,
+                    'error'    => $e->getMessage(),
+                ]);
+
+                if ($attempt < $maxRetries) {
+                    usleep($attempt * 1000 * 1000); // 1s, 2s backoff
+                }
+            } catch (\Exception $e) {
+                Log::error('Provider API Error', [
+                    'provider' => $this->provider->code,
+                    'context'  => $context,
+                    'error'    => $e->getMessage(),
                 ]);
 
                 return [
-                    'success'       => false,
-                    'status_code'   => $result['status_code'],
-                    'body'          => $result['body'],
-                    'data'          => $result['data'],
-                    'type'          => 'ERROR_PROVIDER',
+                    'success'     => false,
+                    'status_code' => 0,
+                    'body'        => $e->getMessage(),
+                    'data'        => [],
+                    'exception'   => $e,
                 ];
-
             }
-
-            return $result;
-        } catch (\Exception $e) {
-            Log::error('Provider API Error', [
-                'provider'  => $this->provider->code,
-                'url'       => $url,
-                'error'     => $e->getMessage(),
-            ]);
-
-            return [
-                'success'       => false,
-                'status_code'   => 0,
-                'body'          => $e->getMessage(),
-                'data'          => [],
-                'exception'     => $e,
-            ];
         }
+
+        return [
+            'success'     => false,
+            'status_code' => 0,
+            'body'        => $lastException?->getMessage() ?? 'Connection failed after retries',
+            'data'        => [],
+        ];
     }
 
     public function parseResponse(array $response): array
@@ -141,40 +169,15 @@ abstract class BaseProvider implements ProviderInterface
         $url = $this->buildCancelUrl();
         $body = $this->buildCancelBody($orderIds);
 
-        try {
-            Log::debug('Provider Cancel Order Request', [
-                'provider' => $this->provider->code,
-                'url'      => $url,
-                'body'     => $body,
-            ]);
+        Log::debug('Provider Cancel Order Request', [
+            'provider' => $this->provider->code,
+            'url'      => $url,
+            'body'     => $body,
+        ]);
 
-            // Luôn dùng POST method
-            $response = Http::timeout(30)->asForm()->post($url, $body);
+        $result = $this->sendWithRetry($url, $body, 'cancel_order');
 
-            $result = [
-                'success'       => $response->successful(),
-                'status_code'   => $response->status(),
-                'body'          => $response->body(),
-                'data'          => $response->json() ?? [],
-            ];
-
-            // Parse response theo format của từng provider
-            $result = $this->parseCancelResponse($result);
-
-            return $result;
-        } catch (\Exception $e) {
-            Log::error('Provider Cancel Order Error', [
-                'provider'  => $this->provider->code,
-                'error'     => $e->getMessage(),
-            ]);
-
-            return [
-                'success'       => false,
-                'status_code'   => 0,
-                'body'          => $e->getMessage(),
-                'data'          => [],
-            ];
-        }
+        return $this->parseCancelResponse($result);
     }
 
     /**

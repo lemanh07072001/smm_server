@@ -12,6 +12,7 @@ use App\Events\DepositSuccess;
 use App\Helpers\TelegramHelper;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redis;
 
 class DepositService
 {
@@ -98,12 +99,37 @@ class DepositService
             'macrodroid', 'manual'    => 'bank',
             default                   => 'bank',
         };
+        // Validate amount
+        $maxDepositAmount = 500_000_000; // 500 triệu VND
+        if ($amount <= 0 || $amount > $maxDepositAmount) {
+            Log::warning('Invalid deposit amount rejected', [
+                'tid'    => $transactionId,
+                'amount' => $amount,
+                'source' => $source,
+            ]);
+            return ['success' => false, 'message' => 'Số tiền không hợp lệ'];
+        }
+
         $logData = []; // Tích lũy log, ghi sau commit để tránh rollback MySQL
+
+        // Distributed lock theo TID — ngăn 2 webhook cùng TID xử lý đồng thời.
+        // Redis SET NX: chỉ set nếu key chưa tồn tại (atomic), TTL 60s để tự dọn.
+        $lockKey      = 'deposit_lock:tid:' . $transactionId;
+        $lockAcquired = Redis::set($lockKey, 1, 'EX', 60, 'NX');
+
+        if (!$lockAcquired) {
+            Log::info('Duplicate webhook blocked by Redis lock', ['tid' => $transactionId]);
+            return [
+                'success'   => false,
+                'duplicate' => true,
+                'message'   => 'Trùng giao dịch, bỏ qua',
+            ];
+        }
 
         DB::beginTransaction();
         try {
-            // 1. Kiểm tra trùng tid → bỏ qua hoàn toàn
-            $existing = BankAuto::where('tid', $transactionId)->lockForUpdate()->first();
+            // 1. Kiểm tra trùng tid trong DB (bảo vệ thứ 2 sau Redis lock)
+            $existing = BankAuto::where('tid', $transactionId)->first();
             if ($existing) {
                 DB::rollBack();
 
@@ -433,6 +459,8 @@ class DepositService
             ]);
 
             return ['success' => false, 'message' => $e->getMessage()];
+        } finally {
+            Redis::del($lockKey);
         }
     }
 
@@ -959,17 +987,19 @@ class DepositService
             return;
         }
 
+        // Lock referrer trước để tránh race condition double commission
+        $referrer = User::where('id', $user->referred_by)->lockForUpdate()->first();
+        if (!$referrer) {
+            return;
+        }
+
         // Chặn double commission: mỗi deposit chỉ được cộng hoa hồng 1 lần
+        // Check sau khi lock để tránh race condition
         if (AffiliateCommission::where('deposit_id', $bankAutoId)->exists()) {
             Log::warning('Affiliate commission already credited for deposit, skipping', [
                 'bank_auto_id' => $bankAutoId,
                 'user_id'      => $user->id,
             ]);
-            return;
-        }
-
-        $referrer = User::find($user->referred_by);
-        if (!$referrer) {
             return;
         }
 

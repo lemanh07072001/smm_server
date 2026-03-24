@@ -293,7 +293,7 @@ class OrderController extends Controller
 
             return response()->json([
                 'message' => 'Tạo đơn hàng thành công.',
-                'data'    => ['order' => $order, 'new_balance' => (float) $user->balance],
+                'data'    => ['order' => $order, 'new_balance' => (float) $user->fresh()->balance],
             ], 201);
 
         } catch (\Exception $e) {
@@ -503,11 +503,19 @@ class OrderController extends Controller
 
         // Chưa gửi lên provider → hoàn tiền ngay, set CANCELED luôn
         if (!$order->provider_order_id) {
-            $refundAmount = (float) $order->charge_amount;
+            // Reload với lock để tránh double refund do concurrent request
+            $order = Order::where('id', $order->id)->lockForUpdate()->first();
+
+            if ($order->status === Order::STATUS_CANCELED) {
+                return;
+            }
+
+            $alreadyRefunded = (float) ($order->refund_amount ?? 0);
+            $refundAmount    = max(0, (float) $order->charge_amount - $alreadyRefunded);
 
             $order->update(array_merge($canceledData, [
                 'status'        => Order::STATUS_CANCELED,
-                'refund_amount' => $refundAmount,
+                'refund_amount' => $alreadyRefunded + $refundAmount,
             ]));
 
             if ($refundAmount > 0) {
@@ -601,7 +609,7 @@ class OrderController extends Controller
 
             return response()->json([
                 'message' => 'Tạo ' . count($orders) . ' đơn hàng thành công.',
-                'data'    => ['orders' => $orders, 'new_balance' => (float) $user->balance],
+                'data'    => ['orders' => $orders, 'new_balance' => (float) $user->fresh()->balance],
             ], 201);
 
         } catch (\Exception $e) {

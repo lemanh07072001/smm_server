@@ -111,16 +111,22 @@ class ApiOrderController extends Controller
                 return response()->json(['error' => 'Insufficient balance'], 400);
             }
 
+            $orders   = [];
             $orderIds = [];
             foreach ($linksToCreate as $singleLink) {
                 $order = $this->orderService->createOrderRecord(
                     $user, $service, $singleLink, $quantity,
                     $amounts, 'api', 0, $request->input('comments')
                 );
+                $orders[]   = $order;
                 $orderIds[] = $order->id;
             }
 
             DB::commit();
+
+            foreach ($orders as $order) {
+                $this->orderService->postCreateOrder($order, $user, $service, $amounts, $quantity);
+            }
 
             return count($orderIds) === 1
                 ? response()->json(['order' => $orderIds[0]])

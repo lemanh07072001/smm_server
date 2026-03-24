@@ -44,9 +44,11 @@ Route::post('/webhook/pay2s', [Pay2sController::class, 'webhook']);
 // Public routes
 Route::middleware('throttle:auth')->group(function () {
     Route::post('/register', [AuthController::class, 'register']);
+    Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+});
+Route::middleware('throttle:5,1')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])->name('login');
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
-    Route::post('/reset-password', [AuthController::class, 'resetPassword']);
 });
 Route::get('/categories/all', [CategoryController::class, 'all']);
 Route::get('/category-groups/all', [CategoryGroupController::class, 'all']);
@@ -156,8 +158,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Deposits (Quản lý nạp tiền)
     Route::get('/deposits', [DepositController::class, 'index']);
     Route::get('/deposits/pending/current', [DepositController::class, 'currentPending']);
-    Route::post('/deposits/pending', [DepositController::class, 'createPending']);
-    Route::post('/deposits/{id}/cancel', [DepositController::class, 'cancel']);
+    Route::post('/deposits/pending', [DepositController::class, 'createPending'])->middleware('throttle:10,1');
+    Route::post('/deposits/{id}/cancel', [DepositController::class, 'cancel'])->middleware('throttle:10,1');
     Route::get('/deposits/{id}', [DepositController::class, 'show']);
 
     // Dashboard
@@ -171,6 +173,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard/purchased-categories', [DashboardController::class, 'userPurchasedCategories']);
     Route::get('/dashboard/financial-stats', [DashboardController::class, 'financialStats']);
     Route::get('/dashboard/order-stats', [DashboardController::class, 'orderStats']);
+    Route::get('/dashboard/revenue-chart', [DashboardController::class, 'revenueChart']);
+    Route::get('/dashboard/orders-chart', [DashboardController::class, 'ordersChart']);
     
     // Notifications (Admin)
     Route::get('/admin/notifications', [NotificationController::class, 'adminIndex']);
@@ -216,12 +220,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/transaction-banks/{id}/manual-credit', [TransactionBankController::class, 'manualCredit']);
 
     // Admin Bank Auto
-    Route::post('/admin/bank-auto/{id}/cancel', [BankAutoController::class, 'cancel']);
-    Route::post('/admin/bank-auto/{id}/manual-credit', [BankAutoController::class, 'manualCredit']);
     Route::get('/admin/bank-auto/{id}/logs', [BankAutoController::class, 'logs']);
-    Route::post('/admin/bank-auto/{id}/approve', [BankAutoController::class, 'approve']);
-    Route::post('/admin/bank-auto/{id}/reject', [BankAutoController::class, 'reject']);
-    Route::post('/admin/bank-auto/{id}/credit', [BankAutoController::class, 'credit']);
+    Route::middleware('throttle:30,1')->group(function () {
+        Route::post('/admin/bank-auto/{id}/cancel', [BankAutoController::class, 'cancel']);
+        Route::post('/admin/bank-auto/{id}/manual-credit', [BankAutoController::class, 'manualCredit']);
+        Route::post('/admin/bank-auto/{id}/approve', [BankAutoController::class, 'approve']);
+        Route::post('/admin/bank-auto/{id}/reject', [BankAutoController::class, 'reject']);
+        Route::post('/admin/bank-auto/{id}/credit', [BankAutoController::class, 'credit']);
+    });
 
 });
 

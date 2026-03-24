@@ -265,9 +265,25 @@ class DashboardController extends Controller
      * - Tổng đơn hàng theo status
      * - Tổng doanh thu, cost, tiền nạp
      */
-    public function totalStats(): JsonResponse
+    public function totalStats(Request $request): JsonResponse
     {
-        $orderStats = \App\Models\Order::selectRaw('
+        $period = $request->get('period', 'all');
+
+        $query = \App\Models\Order::query();
+
+        switch ($period) {
+            case 'today':
+                $query->whereDate('created_at', today());
+                break;
+            case '7days':
+                $query->where('created_at', '>=', now()->subDays(7));
+                break;
+            case '30days':
+                $query->where('created_at', '>=', now()->subDays(30));
+                break;
+        }
+
+        $orderStats = $query->selectRaw('
             COUNT(*) as total_orders,
             SUM(CASE WHEN status = "completed" THEN 1 ELSE 0 END) as completed_orders,
             SUM(CASE WHEN status IN ("in_progress", "processing") THEN 1 ELSE 0 END) as running_orders,
@@ -336,6 +352,87 @@ class DashboardController extends Controller
                 'cost' => (float) ($stats->total_cost ?? 0),
                 'profit' => (float) ($stats->total_profit ?? 0),
             ],
+        ]);
+    }
+
+    /**
+     * API 3: Dữ liệu biểu đồ doanh thu theo ngày
+     * Params: period (today|7days|30days)
+     */
+    public function revenueChart(Request $request): JsonResponse
+    {
+        $period = $request->get('period', 'today');
+
+        switch ($period) {
+            case 'today':
+                $fromDate = now()->startOfDay();
+                $groupFormat = '%H:00';
+                break;
+            case '7days':
+                $fromDate = now()->subDays(7)->startOfDay();
+                $groupFormat = '%Y-%m-%d';
+                break;
+            default: // 30days
+                $fromDate = now()->subDays(30)->startOfDay();
+                $groupFormat = '%Y-%m-%d';
+                break;
+        }
+
+        $rows = \App\Models\Order::where('created_at', '>=', $fromDate)
+            ->selectRaw("DATE_FORMAT(created_at, '{$groupFormat}') as date, SUM(charge_amount) as revenue, SUM(cost_amount) as cost, SUM(profit_amount) as profit")
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get();
+
+        return response()->json([
+            'period' => $period,
+            'data' => $rows->map(fn($row) => [
+                'date' => $row->date,
+                'revenue' => (float) ($row->revenue ?? 0),
+                'cost' => (float) ($row->cost ?? 0),
+                'profit' => (float) ($row->profit ?? 0),
+            ]),
+        ]);
+    }
+
+    /**
+     * API 4: Dữ liệu biểu đồ đơn hàng theo status
+     * Params: period (today|7days|30days)
+     */
+    public function ordersChart(Request $request): JsonResponse
+    {
+        $period = $request->get('period', 'today');
+
+        switch ($period) {
+            case 'today':
+                $fromDate = now()->startOfDay();
+                $groupFormat = '%H:00';
+                break;
+            case '7days':
+                $fromDate = now()->subDays(7)->startOfDay();
+                $groupFormat = '%Y-%m-%d';
+                break;
+            default: // 30days
+                $fromDate = now()->subDays(30)->startOfDay();
+                $groupFormat = '%Y-%m-%d';
+                break;
+        }
+
+        $rows = \App\Models\Order::where('created_at', '>=', $fromDate)
+            ->selectRaw("DATE_FORMAT(created_at, '{$groupFormat}') as date, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed, SUM(CASE WHEN status IN ('in_progress', 'processing') THEN 1 ELSE 0 END) as running, SUM(CASE WHEN status = 'partial' THEN 1 ELSE 0 END) as partial, SUM(CASE WHEN status IN ('canceled', 'failed') THEN 1 ELSE 0 END) as canceled")
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get();
+
+        return response()->json([
+            'period' => $period,
+            'data' => $rows->map(fn($row) => [
+                'date' => $row->date,
+                'completed' => (int) ($row->completed ?? 0),
+                'running' => (int) ($row->running ?? 0),
+                'partial' => (int) ($row->partial ?? 0),
+                'canceled' => (int) ($row->canceled ?? 0),
+            ]),
         ]);
     }
 

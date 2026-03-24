@@ -36,10 +36,7 @@ class User extends Authenticatable
         'api_token',
         'is_active',
         'referred_by',
-        'affiliate_balance',
         'affiliate_commission_rate',
-        'deposit_code',
-        'total_deposited',
     ];
 
     /**
@@ -50,6 +47,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'api_key',
+        'api_token',
     ];
 
     /**

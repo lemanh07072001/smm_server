@@ -623,7 +623,7 @@ class PlaceOrder extends Command
                         $note = "Hoàn tiền đơn hàng #{$processOrder->id} thất bại";
                     } elseif ($isPartial) {
                         $refundAmount = ($quantity > 0 && $remains > 0 && $chargeAmount > 0)
-                            ? round(($remains / $quantity) * $chargeAmount, 2)
+                            ? min(round(($remains / $quantity) * $chargeAmount, 2), $chargeAmount)
                             : 0;
                         $note = "Hoàn tiền một phần đơn hàng #{$processOrder->id} (còn lại: {$remains}/{$quantity})";
                     } else {
