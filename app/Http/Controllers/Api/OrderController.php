@@ -155,6 +155,8 @@ class OrderController extends Controller
         $search = $request->input('search');
         $status = $request->input('status');
         $platform = $request->input('platform');
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
         $perPage = min((int) $request->input('per_page', 20), 100);
 
         // Query orders của user - chỉ select cột cần thiết
@@ -175,6 +177,14 @@ class OrderController extends Controller
         // Filter theo platform (group_id của category group, ví dụ: fb_comment, tiktok...)
         if ($platform) {
             $query->whereHas('service', fn($s) => $s->where('group_id', $platform));
+        }
+
+        // Filter theo ngày tạo
+        if ($dateFrom) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('created_at', '<=', $dateTo);
         }
 
         // Tìm kiếm theo id, link, provider_order_id, tên dịch vụ
