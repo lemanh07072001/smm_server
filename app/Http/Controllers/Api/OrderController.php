@@ -127,7 +127,7 @@ class OrderController extends Controller
         ];
 
         // Phân trang - orderBy id nhanh hơn created_at
-        $perPage = min((int) $request->get('per_page', 20), 100);
+        $perPage = min((int) $request->get('per_page', 10), 500);
         $orders = $query->orderBy('id', 'desc')->paginate($perPage);
 
         return response()->json([
