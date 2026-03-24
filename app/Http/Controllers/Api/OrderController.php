@@ -166,7 +166,7 @@ class OrderController extends Controller
                 'charge_amount', 'start_count', 'remains',
                 'created_at', 'updated_at', 'completed_at'
             ])
-            ->with(['service:id,name,sell_rate'])
+            ->with(['service:id,name,sell_rate,group_id'])
             ->where('user_id', $userId);
 
         // Filter theo status (nếu status là "all" thì lấy tất cả)
@@ -189,12 +189,23 @@ class OrderController extends Controller
 
         // Tìm kiếm theo id, link, provider_order_id, tên dịch vụ
         if ($search) {
-            $query->where(function ($q) use ($search) {
-                $q->where('link', 'like', "%{$search}%")
-                  ->orWhere('provider_order_id', 'like', "%{$search}%")
-                  ->orWhereHas('service', fn($s) => $s->where('name', 'like', "%{$search}%"))
-                  ->orWhere('id', is_numeric($search) ? (int)$search : -1);
-            });
+            $ids = collect(preg_split('/[\s,;]+/', trim($search)))
+                ->map(fn($v) => trim($v))
+                ->filter(fn($v) => is_numeric($v))
+                ->map(fn($v) => (int)$v)
+                ->values()
+                ->all();
+
+            if (count($ids) > 1) {
+                $query->whereIn('id', $ids);
+            } else {
+                $query->where(function ($q) use ($search, $ids) {
+                    $q->where('link', 'like', "%{$search}%")
+                      ->orWhere('provider_order_id', 'like', "%{$search}%")
+                      ->orWhereHas('service', fn($s) => $s->where('name', 'like', "%{$search}%"))
+                      ->orWhere('id', !empty($ids) ? $ids[0] : -1);
+                });
+            }
         }
 
         // Thống kê số lượng từng trạng thái của user
