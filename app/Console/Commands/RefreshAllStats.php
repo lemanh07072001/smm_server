@@ -16,7 +16,7 @@ class RefreshAllStats extends Command
 
     protected $description = 'Quét orders + dongtien scan=0, cộng dồn vào report tables (chạy mỗi giờ)';
 
-    private const EXCLUDED_USER_IDS = [1, 16011];
+    private const EXCLUDED_USER_IDS = []; // [1, 16011];
 
     private const TERMINAL_STATUSES = [
         Order::STATUS_COMPLETED,
