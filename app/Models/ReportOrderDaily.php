@@ -13,7 +13,6 @@ class ReportOrderDaily extends Model
     protected $table = 'report_order_daily';
 
     protected $fillable = [
-        'report_key',
         'date_at',
         'user_id',
         'service_id',
