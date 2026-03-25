@@ -494,16 +494,19 @@ class DashboardController extends Controller
             $days = $firstOrder ? max(1, (int) ceil((time() - strtotime($firstOrder)) / 86400)) : 1;
         }
 
-        $revenue = (float) ($report->revenue ?? 0);
-        $cost    = (float) ($report->cost    ?? 0);
-        $profit  = (float) ($report->profit  ?? 0);
+        // Doanh thu thực = tiền user thanh toán (dongtien type=charge)
+        $revenue  = $cashFlow['payment']['amount'];
+        $cost     = (float) ($report->cost ?? 0);
+        // Hoàn tiền user = tiền thực hoàn vào ví (dongtien type=refund)
+        $refunded = $cashFlow['refund']['amount'];
+        $profit   = $revenue - $cost - $refunded - $affiliateCommission;
 
         return response()->json([
             'data' => [
                 'profit'     => $profit,
                 'revenue'    => $revenue,
                 'cost'       => $cost,
-                'refunded'   => (float) ($report->refunded ?? 0),
+                'refunded'   => $refunded,
                 'affiliate'  => $affiliateCommission,
                 'pipeline'   => $pipeline,
                 'margin'     => $revenue > 0 ? round($profit / $revenue * 100, 1) : 0,
