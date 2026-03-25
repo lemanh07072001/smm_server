@@ -501,6 +501,35 @@ class DashboardController extends Controller
         $refunded = $cashFlow['refund']['amount'];
         $profit   = $revenue - $cost - $refunded - $affiliateCommission;
 
+        // ── Chart data theo ngày ──────────────────────────────────────────
+        $chartQuery = ReportOrderDaily::query();
+        if ($fromTs) $chartQuery->where('date_at', '>=', $fromTs);
+        if ($toTs)   $chartQuery->where('date_at', '<=', $toTs);
+
+        $chartData = $chartQuery
+            ->selectRaw('
+                date_at,
+                SUM(total_charge)    as revenue,
+                SUM(total_cost)      as cost,
+                SUM(order_completed) as completed,
+                SUM(order_partial)   as partial,
+                SUM(order_canceled)  as canceled,
+                SUM(order_failed)    as failed
+            ')
+            ->groupBy('date_at')
+            ->orderBy('date_at')
+            ->get()
+            ->map(fn($r) => [
+                'date'      => date('d/m', $r->date_at),
+                'revenue'   => (float) ($r->revenue   ?? 0),
+                'cost'      => (float) ($r->cost      ?? 0),
+                'profit'    => (float) ($r->revenue ?? 0) - (float) ($r->cost ?? 0),
+                'completed' => (int)   ($r->completed ?? 0),
+                'partial'   => (int)   ($r->partial   ?? 0),
+                'canceled'  => (int)   ($r->canceled  ?? 0),
+                'failed'    => (int)   ($r->failed    ?? 0),
+            ])->values()->all();
+
         return response()->json([
             'data' => [
                 'profit'     => $profit,
@@ -526,7 +555,8 @@ class DashboardController extends Controller
                     'manual' => $cashFlow['deposit_manual'],
                 ],
                 'cash_flow' => $cashFlow,
-                'days' => $days,
+                'days'      => $days,
+                'chart_data' => $chartData,
             ],
         ]);
     }
