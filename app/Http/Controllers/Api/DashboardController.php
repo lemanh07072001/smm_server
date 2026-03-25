@@ -5,13 +5,32 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Dongtien;
 use App\Models\LoginHistory;
+use App\Models\Order;
 use App\Models\ReportDashboardDaily;
 use App\Models\ReportOrderDaily;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 
 class DashboardController extends Controller
 {
+    private const CACHE_TTL = 360; // 6 phút
+
+    /**
+     * Đọc từ Redis trước, nếu miss thì đọc từ DB, cache lại và trả về.
+     */
+    private function getCached(string $key, callable $fallback): mixed
+    {
+        $data = Cache::get($key);
+        if ($data !== null) {
+            return $data;
+        }
+
+        $data = $fallback();
+        Cache::put($key, $data, self::CACHE_TTL);
+        return $data;
+    }
+
     /**
      * Lấy thống kê dashboard theo ngày
      */
@@ -261,219 +280,229 @@ class DashboardController extends Controller
     }
 
     /**
-     * Lấy tổng hợp thống kê toàn hệ thống
-     * - Tổng đơn hàng theo status
-     * - Tổng doanh thu, cost, tiền nạp
+     * Lấy tổng hợp thống kê toàn hệ thống (đọc từ Redis → DB → query trực tiếp)
      */
     public function totalStats(Request $request): JsonResponse
     {
-        $period = $request->get('period', 'all');
+        $period = $request->get('period', 'today');
 
-        $query = \App\Models\Order::query();
+        $data = $this->getCached("dashboard:stats:{$period}", fn() => $this->queryStats($period));
 
-        switch ($period) {
-            case 'today':
-                $query->whereDate('created_at', today());
-                break;
-            case '7days':
-                $query->where('created_at', '>=', now()->subDays(7));
-                break;
-            case '30days':
-                $query->where('created_at', '>=', now()->subDays(30));
-                break;
-        }
-
-        $orderStats = $query->selectRaw('
-            COUNT(*) as total_orders,
-            SUM(CASE WHEN status = "completed" THEN 1 ELSE 0 END) as completed_orders,
-            SUM(CASE WHEN status IN ("in_progress", "processing") THEN 1 ELSE 0 END) as running_orders,
-            SUM(CASE WHEN status = "partial" THEN 1 ELSE 0 END) as partial_orders,
-            SUM(CASE WHEN status IN ("canceled", "failed") THEN 1 ELSE 0 END) as canceled_orders,
-            SUM(charge_amount) as total_revenue,
-            SUM(cost_amount) as total_cost,
-            SUM(profit_amount) as total_profit
-        ')->first();
-
-        $depositTotal = Dongtien::where('type', Dongtien::TYPE_DEPOSIT)
-            ->sum('amount');
-
-        return response()->json([
-            'data' => [
-                'orders' => [
-                    'total' => $orderStats->total_orders ?? 0,
-                    'completed' => $orderStats->completed_orders ?? 0,
-                    'running' => $orderStats->running_orders ?? 0,
-                    'partial' => $orderStats->partial_orders ?? 0,
-                    'canceled' => $orderStats->canceled_orders ?? 0,
-                ],
-                'financial' => [
-                    'total_revenue' => (float) ($orderStats->total_revenue ?? 0),
-                    'total_cost' => (float) ($orderStats->total_cost ?? 0),
-                    'total_profit' => (float) ($orderStats->total_profit ?? 0),
-                    'total_deposit' => (float) $depositTotal,
-                ],
-            ],
-        ]);
+        return response()->json(['data' => $data]);
     }
 
     /**
-     * API 1: Thống kê chi phí, doanh thu, lợi nhuận
-     * Params: period (today|7days|30days)
+     * Thống kê tài chính: doanh thu, chi phí, lợi nhuận + % thay đổi so kỳ trước
      */
     public function financialStats(Request $request): JsonResponse
     {
         $period = $request->get('period', 'today');
 
-        $query = \App\Models\Order::query();
+        $data = $this->getCached("dashboard:financial:{$period}", fn() => $this->queryFinancial($period));
 
-        // Filter theo thời gian
-        switch ($period) {
-            case 'today':
-                $query->whereDate('created_at', today());
-                break;
-            case '7days':
-                $query->where('created_at', '>=', now()->subDays(7));
-                break;
-            case '30days':
-                $query->where('created_at', '>=', now()->subDays(30));
-                break;
-        }
-
-        $stats = $query->selectRaw('
-            SUM(charge_amount) as total_revenue,
-            SUM(cost_amount) as total_cost,
-            SUM(profit_amount) as total_profit
-        ')->first();
-
-        return response()->json([
-            'period' => $period,
-            'data' => [
-                'revenue' => (float) ($stats->total_revenue ?? 0),
-                'cost' => (float) ($stats->total_cost ?? 0),
-                'profit' => (float) ($stats->total_profit ?? 0),
-            ],
-        ]);
+        return response()->json(['period' => $period, 'data' => $data]);
     }
 
     /**
-     * API 3: Dữ liệu biểu đồ doanh thu theo ngày
-     * Params: period (today|7days|30days)
+     * Dữ liệu biểu đồ doanh thu
      */
     public function revenueChart(Request $request): JsonResponse
     {
         $period = $request->get('period', 'today');
 
-        switch ($period) {
-            case 'today':
-                $fromDate = now()->startOfDay();
-                $groupFormat = '%H:00';
-                break;
-            case '7days':
-                $fromDate = now()->subDays(7)->startOfDay();
-                $groupFormat = '%Y-%m-%d';
-                break;
-            default: // 30days
-                $fromDate = now()->subDays(30)->startOfDay();
-                $groupFormat = '%Y-%m-%d';
-                break;
-        }
+        $data = $this->getCached("dashboard:chart:revenue:{$period}", fn() => $this->queryRevenueChart($period));
 
-        $rows = \App\Models\Order::where('created_at', '>=', $fromDate)
-            ->selectRaw("DATE_FORMAT(created_at, '{$groupFormat}') as date, SUM(charge_amount) as revenue, SUM(cost_amount) as cost, SUM(profit_amount) as profit")
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get();
-
-        return response()->json([
-            'period' => $period,
-            'data' => $rows->map(fn($row) => [
-                'date' => $row->date,
-                'revenue' => (float) ($row->revenue ?? 0),
-                'cost' => (float) ($row->cost ?? 0),
-                'profit' => (float) ($row->profit ?? 0),
-            ]),
-        ]);
+        return response()->json(['period' => $period, 'data' => $data]);
     }
 
     /**
-     * API 4: Dữ liệu biểu đồ đơn hàng theo status
-     * Params: period (today|7days|30days)
+     * Dữ liệu biểu đồ đơn hàng theo status
      */
     public function ordersChart(Request $request): JsonResponse
     {
         $period = $request->get('period', 'today');
 
-        switch ($period) {
-            case 'today':
-                $fromDate = now()->startOfDay();
-                $groupFormat = '%H:00';
-                break;
-            case '7days':
-                $fromDate = now()->subDays(7)->startOfDay();
-                $groupFormat = '%Y-%m-%d';
-                break;
-            default: // 30days
-                $fromDate = now()->subDays(30)->startOfDay();
-                $groupFormat = '%Y-%m-%d';
-                break;
-        }
+        $data = $this->getCached("dashboard:chart:orders:{$period}", fn() => $this->queryOrdersChart($period));
 
-        $rows = \App\Models\Order::where('created_at', '>=', $fromDate)
-            ->selectRaw("DATE_FORMAT(created_at, '{$groupFormat}') as date, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed, SUM(CASE WHEN status IN ('in_progress', 'processing') THEN 1 ELSE 0 END) as running, SUM(CASE WHEN status = 'partial' THEN 1 ELSE 0 END) as partial, SUM(CASE WHEN status IN ('canceled', 'failed') THEN 1 ELSE 0 END) as canceled")
-            ->groupBy('date')
-            ->orderBy('date')
-            ->get();
-
-        return response()->json([
-            'period' => $period,
-            'data' => $rows->map(fn($row) => [
-                'date' => $row->date,
-                'completed' => (int) ($row->completed ?? 0),
-                'running' => (int) ($row->running ?? 0),
-                'partial' => (int) ($row->partial ?? 0),
-                'canceled' => (int) ($row->canceled ?? 0),
-            ]),
-        ]);
+        return response()->json(['period' => $period, 'data' => $data]);
     }
 
     /**
-     * API 2: Thống kê đơn hàng theo status
-     * Params: period (today|7days|30days)
+     * Thống kê đơn hàng theo status
      */
     public function orderStats(Request $request): JsonResponse
     {
         $period = $request->get('period', 'today');
 
-        $query = \App\Models\Order::query();
+        $stats = $this->getCached("dashboard:stats:{$period}", fn() => $this->queryStats($period));
 
-        // Filter theo thời gian
-        switch ($period) {
-            case 'today':
-                $query->whereDate('created_at', today());
-                break;
-            case '7days':
-                $query->where('created_at', '>=', now()->subDays(7));
-                break;
-            case '30days':
-                $query->where('created_at', '>=', now()->subDays(30));
-                break;
+        return response()->json(['period' => $period, 'data' => $stats['orders'] ?? []]);
+    }
+
+    // ─── Fallback query methods ────────────────────────────────────────────────
+
+    private function queryStats(string $period): array
+    {
+        if ($period === 'today') {
+            $row = Order::where('created_at', '>=', now()->startOfDay())
+                ->selectRaw("
+                    COUNT(*) as total,
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN status IN ('in_progress','processing') THEN 1 ELSE 0 END) as running,
+                    SUM(CASE WHEN status = 'partial' THEN 1 ELSE 0 END) as partial,
+                    SUM(CASE WHEN status IN ('canceled','failed') THEN 1 ELSE 0 END) as canceled,
+                    SUM(charge_amount) as revenue,
+                    SUM(cost_amount) as cost,
+                    SUM(profit_amount) as profit
+                ")->first();
+
+            $deposit = (float) Dongtien::where('type', Dongtien::TYPE_DEPOSIT)
+                ->where('created_at', '>=', now()->startOfDay())
+                ->sum('amount');
+        } else {
+            $days     = $period === '7days' ? 7 : 30;
+            $fromDate = (int) now()->subDays($days)->format('Ymd');
+            $dateAt   = (int) now()->format('Ymd');
+
+            $row = ReportDashboardDaily::where('date_at', '>=', $fromDate)
+                ->where('date_at', '<=', $dateAt)
+                ->selectRaw("
+                    SUM(total_orders) as total,
+                    SUM(order_completed) as completed,
+                    SUM(order_in_progress + order_processing) as running,
+                    SUM(order_partial) as partial,
+                    SUM(order_canceled + order_failed) as canceled,
+                    SUM(total_revenue) as revenue,
+                    SUM(total_cost) as cost,
+                    SUM(total_profit) as profit,
+                    SUM(deposit_amount) as deposit_total
+                ")->first();
+
+            $deposit = (float) ($row->deposit_total ?? 0);
         }
 
-        $stats = $query->selectRaw('
-            SUM(CASE WHEN status = "completed" THEN 1 ELSE 0 END) as completed,
-            SUM(CASE WHEN status = "partial" THEN 1 ELSE 0 END) as partial,
-            SUM(CASE WHEN status = "canceled" THEN 1 ELSE 0 END) as canceled,
-            SUM(CASE WHEN status = "failed" THEN 1 ELSE 0 END) as failed
-        ')->first();
-
-        return response()->json([
-            'period' => $period,
-            'data' => [
-                'completed' => (int) ($stats->completed ?? 0),
-                'partial' => (int) ($stats->partial ?? 0),
-                'canceled' => (int) ($stats->canceled ?? 0),
-                'failed' => (int) ($stats->failed ?? 0),
+        return [
+            'orders' => [
+                'total'     => (int) ($row->total ?? 0),
+                'completed' => (int) ($row->completed ?? 0),
+                'running'   => (int) ($row->running ?? 0),
+                'partial'   => (int) ($row->partial ?? 0),
+                'canceled'  => (int) ($row->canceled ?? 0),
             ],
-        ]);
+            'financial' => [
+                'total_revenue' => (float) ($row->revenue ?? 0),
+                'total_cost'    => (float) ($row->cost ?? 0),
+                'total_profit'  => (float) ($row->profit ?? 0),
+                'total_deposit' => $deposit,
+            ],
+        ];
+    }
+
+    private function queryFinancial(string $period): array
+    {
+        $calcChange = function (float $current, float $previous): ?float {
+            if ($previous == 0) return null;
+            return round((($current - $previous) / $previous) * 100, 1);
+        };
+
+        if ($period === 'today') {
+            $current = Order::where('created_at', '>=', now()->startOfDay())
+                ->selectRaw('SUM(charge_amount) as revenue, SUM(cost_amount) as cost, SUM(profit_amount) as profit')
+                ->first();
+
+            $previous = Order::where('created_at', '>=', now()->subDay()->startOfDay())
+                ->where('created_at', '<', now()->startOfDay())
+                ->selectRaw('SUM(charge_amount) as revenue, SUM(cost_amount) as cost, SUM(profit_amount) as profit')
+                ->first();
+        } else {
+            $days = $period === '7days' ? 7 : 30;
+
+            $current = ReportDashboardDaily::where('date_at', '>=', (int) now()->subDays($days)->format('Ymd'))
+                ->where('date_at', '<=', (int) now()->format('Ymd'))
+                ->selectRaw('SUM(total_revenue) as revenue, SUM(total_cost) as cost, SUM(total_profit) as profit')
+                ->first();
+
+            $previous = ReportDashboardDaily::where('date_at', '>=', (int) now()->subDays($days * 2)->format('Ymd'))
+                ->where('date_at', '<=', (int) now()->subDays($days + 1)->format('Ymd'))
+                ->selectRaw('SUM(total_revenue) as revenue, SUM(total_cost) as cost, SUM(total_profit) as profit')
+                ->first();
+        }
+
+        $cr = (float) ($current->revenue ?? 0);
+        $cc = (float) ($current->cost ?? 0);
+        $cp = (float) ($current->profit ?? 0);
+        $pr = (float) ($previous->revenue ?? 0);
+        $pc = (float) ($previous->cost ?? 0);
+        $pp = (float) ($previous->profit ?? 0);
+
+        return [
+            'revenue'        => $cr,
+            'cost'           => $cc,
+            'profit'         => $cp,
+            'revenue_change' => $calcChange($cr, $pr),
+            'cost_change'    => $calcChange($cc, $pc),
+            'profit_change'  => $calcChange($cp, $pp),
+        ];
+    }
+
+    private function queryRevenueChart(string $period): array
+    {
+        if ($period === 'today') {
+            return Order::where('created_at', '>=', now()->startOfDay())
+                ->selectRaw("DATE_FORMAT(created_at, '%H:00') as date, SUM(charge_amount) as revenue, SUM(cost_amount) as cost, SUM(profit_amount) as profit")
+                ->groupBy('date')->orderBy('date')->get()
+                ->map(fn($r) => ['date' => $r->date, 'revenue' => (float)($r->revenue??0), 'cost' => (float)($r->cost??0), 'profit' => (float)($r->profit??0)])
+                ->values()->all();
+        }
+
+        $days = $period === '7days' ? 7 : 30;
+
+        return ReportDashboardDaily::where('date_at', '>=', (int) now()->subDays($days)->format('Ymd'))
+            ->where('date_at', '<=', (int) now()->format('Ymd'))
+            ->orderBy('date_at')
+            ->get(['date_at', 'total_revenue', 'total_cost', 'total_profit'])
+            ->map(fn($r) => [
+                'date'    => $this->formatDateAt($r->date_at),
+                'revenue' => (float)($r->total_revenue ?? 0),
+                'cost'    => (float)($r->total_cost    ?? 0),
+                'profit'  => (float)($r->total_profit  ?? 0),
+            ])->values()->all();
+    }
+
+    private function queryOrdersChart(string $period): array
+    {
+        if ($period === 'today') {
+            return Order::where('created_at', '>=', now()->startOfDay())
+                ->selectRaw("
+                    DATE_FORMAT(created_at, '%H:00') as date,
+                    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+                    SUM(CASE WHEN status IN ('in_progress','processing') THEN 1 ELSE 0 END) as running,
+                    SUM(CASE WHEN status = 'partial' THEN 1 ELSE 0 END) as partial,
+                    SUM(CASE WHEN status IN ('canceled','failed') THEN 1 ELSE 0 END) as canceled
+                ")
+                ->groupBy('date')->orderBy('date')->get()
+                ->map(fn($r) => ['date' => $r->date, 'completed' => (int)($r->completed??0), 'running' => (int)($r->running??0), 'partial' => (int)($r->partial??0), 'canceled' => (int)($r->canceled??0)])
+                ->values()->all();
+        }
+
+        $days = $period === '7days' ? 7 : 30;
+
+        return ReportDashboardDaily::where('date_at', '>=', (int) now()->subDays($days)->format('Ymd'))
+            ->where('date_at', '<=', (int) now()->format('Ymd'))
+            ->orderBy('date_at')
+            ->get(['date_at', 'order_completed', 'order_in_progress', 'order_processing', 'order_partial', 'order_canceled', 'order_failed'])
+            ->map(fn($r) => [
+                'date'      => $this->formatDateAt($r->date_at),
+                'completed' => (int)($r->order_completed    ?? 0),
+                'running'   => (int)(($r->order_in_progress ?? 0) + ($r->order_processing ?? 0)),
+                'partial'   => (int)($r->order_partial      ?? 0),
+                'canceled'  => (int)(($r->order_canceled    ?? 0) + ($r->order_failed ?? 0)),
+            ])->values()->all();
+    }
+
+    private function formatDateAt(int $dateAt): string
+    {
+        $s = (string) $dateAt;
+        return substr($s, 0, 4) . '-' . substr($s, 4, 2) . '-' . substr($s, 6, 2);
     }
 }

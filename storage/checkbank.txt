@@ -1,0 +1,22 @@
+Start check bank: 2026-03-25 11:19:01
+
+   Predis\Connection\Resource\Exception\StreamInitException 
+
+  A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond [tcp://172.31.134.233:6379]
+
+  at vendor\predis\predis\src\Connection\Resource\StreamFactory.php:241
+    [90m237[0m[90m▕ [0m[35;1m        if ([0m[39;1mis_resource[0m[35;1m([0m[39;1m$stream[0m[35;1m)) {[0m
+    [90m238[0m[90m▕ [0m[35;1m            [0m[39;1mfclose[0m[35;1m([0m[39;1m$stream[0m[35;1m);[0m
+    [90m239[0m[90m▕ [0m[35;1m        }[0m
+    [90m240[0m[90m▕ [0m
+[31;1m  ➜ [0m[3;1m241[0m[90m▕ [0m[35;1m        throw new [0m[39;1mStreamInitException[0m[35;1m([0m[37m"[0m[39;1m$message[0m[37m [[0m[35;1m{[0m[39;1m$parameters[0m[35;1m}[0m[37m]"[0m[35;1m, [0m[39;1m$code[0m[35;1m);[0m
+    [90m242[0m[90m▕ [0m[35;1m    }[0m
+    [90m243[0m[90m▕ [0m[35;1m}[0m
+    [90m244[0m[90m▕ [0m
+
+  1   vendor\predis\predis\src\Connection\Resource\StreamFactory.php:214
+      Predis\Connection\Resource\StreamFactory::onInitializationError(Object(Predis\Connection\Parameters), "A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond")
+
+  2   vendor\predis\predis\src\Connection\Resource\StreamFactory.php:109
+      Predis\Connection\Resource\StreamFactory::createStreamSocket(Object(Predis\Connection\Parameters), "tcp://172.31.134.233:6379")
+

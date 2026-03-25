@@ -6,6 +6,7 @@ use App\Console\Commands\CheckBank;
 use App\Console\Commands\ExpireDeposits;
 use App\Console\Commands\GenerateOrderReport;
 use App\Console\Commands\GenerateUserFinancialReport;
+use App\Console\Commands\RefreshDashboardStats;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
@@ -16,6 +17,7 @@ class Kernel extends ConsoleKernel
         ExpireDeposits::class,
         GenerateOrderReport::class,
         GenerateUserFinancialReport::class,
+        RefreshDashboardStats::class,
     ];
 
     /**
@@ -50,6 +52,13 @@ class Kernel extends ConsoleKernel
             ->everyMinute()
             ->withoutOverlapping(5)
             ->appendOutputTo(storage_path('logs/place-order-refund-check.log'));
+
+        // Refresh dashboard stats mỗi 5 phút → lưu vào ReportDashboardDaily + Redis
+        $schedule->command('dashboard:refresh')
+            ->runInBackground()
+            ->everyFiveMinutes()
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/dashboard-refresh.log'));
 
         // Kiểm tra số dư nhà cung cấp mỗi 5 phút
         $schedule->command('provider:check-balance')
