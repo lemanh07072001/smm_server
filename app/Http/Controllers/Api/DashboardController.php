@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AffiliateCommission;
 use App\Models\Dongtien;
 use App\Models\LoginHistory;
+use App\Models\Order;
 use App\Models\ReportDashboardDaily;
 use App\Models\ReportOrderDaily;
 use Illuminate\Http\Request;
@@ -264,13 +266,18 @@ class DashboardController extends Controller
     }
 
     /**
-     * Tổng hợp thống kê toàn hệ thống — đọc từ Redis
+     * Tổng hợp thống kê toàn hệ thống — đọc từ Redis (hoặc query all)
      */
     public function totalStats(Request $request): JsonResponse
     {
         $period = $request->get('period', 'today');
-        $data   = $this->getCached("dashboard:stats:{$period}");
 
+        if ($period === 'all') {
+            $data = $this->buildAllStats();
+            return response()->json(['data' => $data]);
+        }
+
+        $data = $this->getCached("dashboard:stats:{$period}");
         return response()->json(['data' => $data]);
     }
 
@@ -280,8 +287,13 @@ class DashboardController extends Controller
     public function financialStats(Request $request): JsonResponse
     {
         $period = $request->get('period', 'today');
-        $data   = $this->getCached("dashboard:financial:{$period}");
 
+        if ($period === 'all') {
+            $data = $this->buildAllFinancial();
+            return response()->json(['period' => $period, 'data' => $data]);
+        }
+
+        $data = $this->getCached("dashboard:financial:{$period}");
         return response()->json(['period' => $period, 'data' => $data]);
     }
 
@@ -291,8 +303,13 @@ class DashboardController extends Controller
     public function revenueChart(Request $request): JsonResponse
     {
         $period = $request->get('period', 'today');
-        $data   = $this->getCached("dashboard:chart:revenue:{$period}");
 
+        if ($period === 'all') {
+            $data = $this->buildAllRevenueChart();
+            return response()->json(['period' => $period, 'data' => $data]);
+        }
+
+        $data = $this->getCached("dashboard:chart:revenue:{$period}");
         return response()->json(['period' => $period, 'data' => $data]);
     }
 
@@ -302,8 +319,13 @@ class DashboardController extends Controller
     public function ordersChart(Request $request): JsonResponse
     {
         $period = $request->get('period', 'today');
-        $data   = $this->getCached("dashboard:chart:orders:{$period}");
 
+        if ($period === 'all') {
+            $data = $this->buildAllOrdersChart();
+            return response()->json(['period' => $period, 'data' => $data]);
+        }
+
+        $data = $this->getCached("dashboard:chart:orders:{$period}");
         return response()->json(['period' => $period, 'data' => $data]);
     }
 
@@ -313,8 +335,229 @@ class DashboardController extends Controller
     public function orderStats(Request $request): JsonResponse
     {
         $period = $request->get('period', 'today');
-        $stats  = $this->getCached("dashboard:stats:{$period}");
 
+        if ($period === 'all') {
+            $stats = $this->buildAllStats();
+            return response()->json(['period' => $period, 'data' => $stats['orders'] ?? []]);
+        }
+
+        $stats = $this->getCached("dashboard:stats:{$period}");
         return response()->json(['period' => $period, 'data' => $stats['orders'] ?? []]);
+    }
+
+    private function buildAllStats(): array
+    {
+        $row = ReportOrderDaily::selectRaw("
+            SUM(order_completed) as completed,
+            SUM(order_partial)   as partial,
+            SUM(order_canceled + order_failed) as canceled,
+            SUM(order_completed + order_partial + order_canceled + order_failed) as total,
+            SUM(total_charge)  as revenue,
+            SUM(total_cost)    as cost,
+            SUM(total_profit)  as profit
+        ")->first();
+
+        $depositAmount = \App\Models\Dongtien::where('type', \App\Models\Dongtien::TYPE_DEPOSIT)->sum('amount');
+
+        return [
+            'orders' => [
+                'total'     => (int)   ($row->total     ?? 0),
+                'completed' => (int)   ($row->completed ?? 0),
+                'running'   => 0,
+                'partial'   => (int)   ($row->partial   ?? 0),
+                'canceled'  => (int)   ($row->canceled  ?? 0),
+            ],
+            'financial' => [
+                'total_revenue' => (float) ($row->revenue ?? 0),
+                'total_cost'    => (float) ($row->cost    ?? 0),
+                'total_profit'  => (float) ($row->profit  ?? 0),
+                'total_deposit' => (float) $depositAmount,
+            ],
+        ];
+    }
+
+    private function buildAllFinancial(): array
+    {
+        $row = ReportOrderDaily::selectRaw("
+            SUM(total_charge)  as revenue,
+            SUM(total_cost)    as cost,
+            SUM(total_profit)  as profit
+        ")->first();
+
+        return [
+            'revenue'        => (float) ($row->revenue ?? 0),
+            'cost'           => (float) ($row->cost    ?? 0),
+            'profit'         => (float) ($row->profit  ?? 0),
+            'revenue_change' => null,
+            'cost_change'    => null,
+            'profit_change'  => null,
+        ];
+    }
+
+    private function buildAllRevenueChart(): array
+    {
+        return ReportOrderDaily::selectRaw('date_at, SUM(total_charge) as revenue, SUM(total_cost) as cost, SUM(total_profit) as profit')
+            ->groupBy('date_at')
+            ->orderBy('date_at')
+            ->get()
+            ->map(fn($r) => [
+                'date'    => date('Y-m-d', $r->date_at),
+                'revenue' => (float) ($r->revenue ?? 0),
+                'cost'    => (float) ($r->cost    ?? 0),
+                'profit'  => (float) ($r->profit  ?? 0),
+            ])->values()->all();
+    }
+
+    private function buildAllOrdersChart(): array
+    {
+        return ReportOrderDaily::selectRaw('date_at, SUM(order_completed) as completed, SUM(order_partial) as partial, SUM(order_canceled + order_failed) as canceled')
+            ->groupBy('date_at')
+            ->orderBy('date_at')
+            ->get()
+            ->map(fn($r) => [
+                'date'      => date('Y-m-d', $r->date_at),
+                'completed' => (int) ($r->completed ?? 0),
+                'partial'   => (int) ($r->partial   ?? 0),
+                'canceled'  => (int) ($r->canceled  ?? 0),
+            ])->values()->all();
+    }
+
+    // ─── Overview endpoint ────────────────────────────────────────────────────
+
+    public function overview(Request $request): JsonResponse
+    {
+        $period    = $request->get('period', 'all');
+        $fromDate  = $request->get('from_date');
+        $toDate    = $request->get('to_date');
+
+        [$fromTs, $toTs, $fromDt, $toDt] = $this->resolveDateRange($period, $fromDate, $toDate);
+
+        // ── Financials từ report_order_daily ──────────────────────────────
+        $reportQuery = ReportOrderDaily::query();
+        if ($fromTs) $reportQuery->where('date_at', '>=', $fromTs);
+        if ($toTs)   $reportQuery->where('date_at', '<=', $toTs);
+
+        $report = $reportQuery->selectRaw("
+            SUM(order_completed)                           as completed_count,
+            SUM(order_partial)                             as partial_count,
+            SUM(order_canceled)                            as canceled_count,
+            SUM(order_failed)                              as failed_count,
+            SUM(order_pending + order_processing + order_in_progress + order_completed + order_partial + order_canceled + order_failed) as total_count,
+            SUM(total_charge)                              as revenue,
+            SUM(total_cost)                                as cost,
+            SUM(total_profit)                              as profit,
+            SUM(total_refund)                              as refunded
+        ")->first();
+
+        // ── Pipeline: charge_amount của orders đang chạy ──────────────────
+        $pipelineQuery = Order::whereIn('status', ['pending', 'processing', 'in_progress']);
+        if ($fromDt) $pipelineQuery->where('created_at', '>=', $fromDt);
+        if ($toDt)   $pipelineQuery->where('created_at', '<=', $toDt);
+        $pipeline = (float) $pipelineQuery->sum('charge_amount');
+
+        // ── Affiliate commission ──────────────────────────────────────────
+        $affQuery = AffiliateCommission::query();
+        if ($fromDt) $affQuery->where('created_at', '>=', $fromDt);
+        if ($toDt)   $affQuery->where('created_at', '<=', $toDt);
+        $affiliateCommission = (float) $affQuery->sum('commission_amount');
+
+        // ── Dongtien (cash flow) ──────────────────────────────────────────
+        $cashTypes = [
+            'deposit_auto'   => ['deposit'],
+            'deposit_manual' => ['adjustment'],
+            'payment'        => ['charge'],
+            'refund'         => ['refund'],
+            'affiliate_withdraw' => ['withdraw'],
+        ];
+
+        $cashFlow = [];
+        foreach ($cashTypes as $key => $types) {
+            $q = Dongtien::whereIn('type', $types);
+            if ($fromDt) $q->where('created_at', '>=', $fromDt);
+            if ($toDt)   $q->where('created_at', '<=', $toDt);
+            $cashFlow[$key] = [
+                'amount' => (float) $q->sum('amount'),
+                'count'  => (int)   $q->count(),
+            ];
+        }
+
+        // ── Days in range (cho TB/ngày) ───────────────────────────────────
+        $days = 1;
+        if ($fromDt && $toDt) {
+            $days = max(1, (int) ceil((strtotime($toDt) - strtotime($fromDt)) / 86400));
+        } elseif ($period === '7days') {
+            $days = 7;
+        } elseif ($period === '30days') {
+            $days = 30;
+        } elseif ($period === 'all') {
+            $firstOrder = Order::min('created_at');
+            $days = $firstOrder ? max(1, (int) ceil((time() - strtotime($firstOrder)) / 86400)) : 1;
+        }
+
+        $revenue = (float) ($report->revenue ?? 0);
+        $cost    = (float) ($report->cost    ?? 0);
+        $profit  = (float) ($report->profit  ?? 0);
+
+        return response()->json([
+            'data' => [
+                'profit'     => $profit,
+                'revenue'    => $revenue,
+                'cost'       => $cost,
+                'refunded'   => (float) ($report->refunded ?? 0),
+                'affiliate'  => $affiliateCommission,
+                'pipeline'   => $pipeline,
+                'margin'     => $revenue > 0 ? round($profit / $revenue * 100, 1) : 0,
+                'avg_per_day' => round($profit / $days, 0),
+                'avg_revenue_per_day' => round($revenue / $days, 0),
+                'orders' => [
+                    'total'     => (int) ($report->total_count     ?? 0),
+                    'completed' => (int) ($report->completed_count ?? 0),
+                    'partial'   => (int) ($report->partial_count   ?? 0),
+                    'canceled'  => (int) ($report->canceled_count  ?? 0),
+                    'failed'    => (int) ($report->failed_count    ?? 0),
+                ],
+                'deposits' => [
+                    'total'  => $cashFlow['deposit_auto']['amount'] + $cashFlow['deposit_manual']['amount'],
+                    'count'  => $cashFlow['deposit_auto']['count']  + $cashFlow['deposit_manual']['count'],
+                    'auto'   => $cashFlow['deposit_auto'],
+                    'manual' => $cashFlow['deposit_manual'],
+                ],
+                'cash_flow' => $cashFlow,
+                'days' => $days,
+            ],
+        ]);
+    }
+
+    private function resolveDateRange(string $period, ?string $fromDate, ?string $toDate): array
+    {
+        if ($fromDate && $toDate) {
+            $fromTs = strtotime($fromDate . ' 00:00:00');
+            $toTs   = strtotime($toDate   . ' 23:59:59');
+            return [$fromTs, $toTs, $fromDate . ' 00:00:00', $toDate . ' 23:59:59'];
+        }
+
+        $now = now();
+
+        return match ($period) {
+            'today'   => [
+                $now->copy()->startOfDay()->timestamp,
+                $now->copy()->endOfDay()->timestamp,
+                $now->copy()->startOfDay()->toDateTimeString(),
+                $now->copy()->endOfDay()->toDateTimeString(),
+            ],
+            '7days'   => [
+                $now->copy()->subDays(7)->startOfDay()->timestamp,
+                $now->copy()->endOfDay()->timestamp,
+                $now->copy()->subDays(7)->startOfDay()->toDateTimeString(),
+                $now->copy()->endOfDay()->toDateTimeString(),
+            ],
+            '30days'  => [
+                $now->copy()->subDays(30)->startOfDay()->timestamp,
+                $now->copy()->endOfDay()->timestamp,
+                $now->copy()->subDays(30)->startOfDay()->toDateTimeString(),
+                $now->copy()->endOfDay()->toDateTimeString(),
+            ],
+            default   => [null, null, null, null], // all time
+        };
     }
 }

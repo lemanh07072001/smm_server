@@ -163,6 +163,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/deposits/{id}', [DepositController::class, 'show']);
 
     // Dashboard
+    Route::get('/dashboard/overview', [DashboardController::class, 'overview']);
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/dashboard/today', [DashboardController::class, 'today']);
     Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
