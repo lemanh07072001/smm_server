@@ -4,9 +4,7 @@ namespace App\Console;
 
 use App\Console\Commands\CheckBank;
 use App\Console\Commands\ExpireDeposits;
-use App\Console\Commands\GenerateOrderReport;
-use App\Console\Commands\GenerateUserFinancialReport;
-use App\Console\Commands\RefreshDashboardStats;
+use App\Console\Commands\RefreshAllStats;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
@@ -15,9 +13,7 @@ class Kernel extends ConsoleKernel
     protected $commands = [
         CheckBank::class,
         ExpireDeposits::class,
-        GenerateOrderReport::class,
-        GenerateUserFinancialReport::class,
-        RefreshDashboardStats::class,
+        RefreshAllStats::class,
     ];
 
     /**
@@ -53,13 +49,6 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping(5)
             ->appendOutputTo(storage_path('logs/place-order-refund-check.log'));
 
-        // Refresh dashboard stats mỗi 5 phút → lưu vào ReportDashboardDaily + Redis
-        $schedule->command('dashboard:refresh')
-            ->runInBackground()
-            ->everyFiveMinutes()
-            ->withoutOverlapping()
-            ->appendOutputTo(storage_path('logs/dashboard-refresh.log'));
-
         // Kiểm tra số dư nhà cung cấp mỗi 5 phút
         $schedule->command('provider:check-balance')
             ->runInBackground()
@@ -67,19 +56,12 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/provider-balance.log'));
 
-        // Thống kê đơn hàng mỗi 5 phút
-        $schedule->command('report:order')
+        // Quét orders + dongtien, cập nhật report tables + cache dashboard mỗi 5 phút
+        $schedule->command('report:refresh')
             ->runInBackground()
             ->everyFiveMinutes()
             ->withoutOverlapping()
-            ->appendOutputTo(storage_path('logs/order-report.log'));
-
-        // Thống kê tài chính user mỗi 5 phút
-        $schedule->command('report:user-financial')
-            ->runInBackground()
-            ->everyFiveMinutes()
-            ->withoutOverlapping()
-            ->appendOutputTo(storage_path('logs/user-financial-report.log'));
+            ->appendOutputTo(storage_path('logs/report-refresh.log'));
 
         // Expire các giao dịch pending quá 5 phút
         $schedule->command('deposits:expire')
