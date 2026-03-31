@@ -575,13 +575,15 @@ class PlaceOrder extends Command
             try {
                 $newStatus   = $group['data']['status'] ?? null;
                 $isFailed    = $newStatus === Order::STATUS_FAILED;
+                $isCanceled  = $newStatus === Order::STATUS_CANCELED;
                 $isPartial   = $newStatus === Order::STATUS_PARTIAL;
                 $isCompleted = $newStatus === Order::STATUS_COMPLETED;
                 $hasRemains  = $isCompleted && (int) ($group['data']['remains'] ?? 0) > 0;
 
                 // Load orders nếu cần tính hoàn tiền
                 // hasRemains: provider trả completed nhưng còn remains > 0 → vẫn hoàn một phần
-                $ordersToProcess = ($isFailed || $isPartial || $hasRemains)
+                // isCanceled: provider hủy đơn → hoàn toàn bộ charge_amount
+                $ordersToProcess = ($isFailed || $isCanceled || $isPartial || $hasRemains)
                     ? Order::whereIn('id', $group['ids'])->get()
                     : collect();
 
@@ -595,6 +597,9 @@ class PlaceOrder extends Command
                     if ($isFailed) {
                         $refundAmount = $chargeAmount;
                         $note = "Hoàn tiền đơn hàng #{$processOrder->id} thất bại";
+                    } elseif ($isCanceled) {
+                        $refundAmount = $chargeAmount;
+                        $note = "Hoàn tiền đơn hàng #{$processOrder->id} bị hủy";
                     } elseif ($isPartial || $hasRemains) {
                         $refundAmount = ($quantity > 0 && $remains > 0 && $chargeAmount > 0)
                             ? min(round(($remains / $quantity) * $chargeAmount, 2), $chargeAmount)
@@ -653,7 +658,7 @@ class PlaceOrder extends Command
                         $userOrderIds = array_column($refunds, 'order_id');
 
                         // Update status TRONG transaction để atomic với refund
-                        if ($isFailed) {
+                        if ($isFailed || $isCanceled) {
                             Order::whereIn('id', $userOrderIds)->update(
                                 array_merge($group['data'], ['refund_amount' => DB::raw('charge_amount')])
                             );
