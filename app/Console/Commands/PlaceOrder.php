@@ -585,35 +585,8 @@ class PlaceOrder extends Command
                     ? Order::whereIn('id', $group['ids'])->get()
                     : collect();
 
-                if ($isFailed) {
-                    Order::whereIn('id', $group['ids'])->update(
-                        array_merge($group['data'], ['refund_amount' => DB::raw('charge_amount')])
-                    );
-                } elseif ($isCompleted) {
-                    // Chỉ lấy các order chưa có completed_at (lần đầu hoàn thành)
-                    $justCompletedIds = Order::whereIn('id', $group['ids'])
-                        ->whereNull('completed_at')
-                        ->pluck('id')
-                        ->all();
-
-                    Order::whereIn('id', $group['ids'])
-                        ->whereNull('completed_at')
-                        ->update(array_merge($group['data'], ['completed_at' => now()]));
-
-                    // Dispatch job thống kê chỉ cho các order vừa mới hoàn thành lần đầu
-                    if (!empty($justCompletedIds)) {
-                        Order::whereIn('id', $justCompletedIds)
-                            ->whereBetween('quantity', [1, 1000])
-                            ->each(fn($o) => \App\Jobs\CalculateOrderCompletionStat::dispatch($o));
-                    }
-                } else {
-                    Order::whereIn('id', $group['ids'])->update($group['data']);
-                }
-
-                // Tính refund cho từng order, group theo user_id để gộp vào 1 transaction/user
-                // Thay vì N transactions riêng lẻ → M transactions (M = số user duy nhất)
-                $refundsByUser = []; // [user_id => [{order_id, amount, note}]]
-
+                // Tính refund TRƯỚC khi update DB để tránh dùng data đã thay đổi
+                $refundsByUser = [];
                 foreach ($ordersToProcess as $processOrder) {
                     $remains      = (int) ($group['data']['remains'] ?? $processOrder->remains ?? 0);
                     $quantity     = (int) $processOrder->quantity;
@@ -641,10 +614,57 @@ class PlaceOrder extends Command
                     }
                 }
 
-                // 1 transaction per user, gộp toàn bộ đơn của user đó
+                // Tách ids: có hoàn tiền (xử lý trong transaction) vs không có (bulk update ngoài)
+                $refundOrderIds = [];
+                foreach ($refundsByUser as $refunds) {
+                    foreach ($refunds as $r) {
+                        $refundOrderIds[] = $r['order_id'];
+                    }
+                }
+                $noRefundIds = array_values(array_diff($group['ids'], $refundOrderIds));
+
+                // Bulk update các order KHÔNG cần hoàn tiền (không có rủi ro mất tiền)
+                if (!empty($noRefundIds)) {
+                    if ($isFailed) {
+                        Order::whereIn('id', $noRefundIds)->update($group['data']);
+                    } elseif ($isCompleted) {
+                        $justCompletedIds = Order::whereIn('id', $noRefundIds)
+                            ->whereNull('completed_at')
+                            ->pluck('id')
+                            ->all();
+                        Order::whereIn('id', $noRefundIds)
+                            ->whereNull('completed_at')
+                            ->update(array_merge($group['data'], ['completed_at' => now()]));
+                        if (!empty($justCompletedIds)) {
+                            Order::whereIn('id', $justCompletedIds)
+                                ->whereBetween('quantity', [1, 1000])
+                                ->each(fn($o) => \App\Jobs\CalculateOrderCompletionStat::dispatch($o));
+                        }
+                    } else {
+                        Order::whereIn('id', $noRefundIds)->update($group['data']);
+                    }
+                }
+
+                // 1 transaction per user: atomic status update + hoàn tiền
+                // Đảm bảo nếu crash giữa chừng → rollback cả 2, không mất tiền user
                 foreach ($refundsByUser as $userId => $refunds) {
                     DB::beginTransaction();
                     try {
+                        $userOrderIds = array_column($refunds, 'order_id');
+
+                        // Update status TRONG transaction để atomic với refund
+                        if ($isFailed) {
+                            Order::whereIn('id', $userOrderIds)->update(
+                                array_merge($group['data'], ['refund_amount' => DB::raw('charge_amount')])
+                            );
+                        } elseif ($isCompleted) {
+                            Order::whereIn('id', $userOrderIds)
+                                ->whereNull('completed_at')
+                                ->update(array_merge($group['data'], ['completed_at' => now()]));
+                        } else {
+                            Order::whereIn('id', $userOrderIds)->update($group['data']);
+                        }
+
                         $user = User::lockForUpdate()->find($userId);
                         if (!$user) {
                             DB::rollBack();
@@ -665,6 +685,13 @@ class PlaceOrder extends Command
                         }
 
                         DB::commit();
+
+                        // Dispatch thống kê SAU commit (tránh dispatch cho transaction đã rollback)
+                        if ($isCompleted) {
+                            Order::whereIn('id', $userOrderIds)
+                                ->whereBetween('quantity', [1, 1000])
+                                ->each(fn($o) => \App\Jobs\CalculateOrderCompletionStat::dispatch($o));
+                        }
                     } catch (\Exception $e) {
                         DB::rollBack();
                         Log::error('Error refunding orders (bulk status)', [
