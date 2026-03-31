@@ -42,8 +42,7 @@ class PlaceOrder extends Command
             'add-priority' => $this->handleAddPriority(),
             'scan'         => $this->handleScan(),
             'status'       => $this->handleStatus(),
-            'refund-check' => $this->handleRefundCheck(),
-            default        => $this->error("Action không hợp lệ. Chỉ hỗ trợ: add-priority, add, scan, status, refund-check"),
+            default        => $this->error("Action không hợp lệ. Chỉ hỗ trợ: add-priority, add, scan, status"),
         };
     }
 
@@ -294,10 +293,11 @@ class PlaceOrder extends Command
         $chunkSize = 500;
         $processed = 0;
 
-        // Chỉ check orders đang active (đã gửi lên provider, chưa hoàn thành)
+        // Check tất cả orders chưa hoàn thành (bao gồm cả processing - đang chờ hoàn phía provider)
         $activeStatuses = [
             Order::STATUS_IN_PROGRESS,
             Order::STATUS_PENDING,
+            Order::STATUS_PROCESSING,
         ];
 
         $totalCount = Order::whereIn('status', $activeStatuses)
@@ -573,16 +573,17 @@ class PlaceOrder extends Command
 
         foreach ($grouped as $group) {
             try {
-                $newStatus = $group['data']['status'] ?? null;
-                $isFailed  = $newStatus === Order::STATUS_FAILED;
-                $isPartial = $newStatus === Order::STATUS_PARTIAL;
+                $newStatus   = $group['data']['status'] ?? null;
+                $isFailed    = $newStatus === Order::STATUS_FAILED;
+                $isPartial   = $newStatus === Order::STATUS_PARTIAL;
+                $isCompleted = $newStatus === Order::STATUS_COMPLETED;
+                $hasRemains  = $isCompleted && (int) ($group['data']['remains'] ?? 0) > 0;
 
                 // Load orders nếu cần tính hoàn tiền
-                $ordersToProcess = ($isFailed || $isPartial)
+                // hasRemains: provider trả completed nhưng còn remains > 0 → vẫn hoàn một phần
+                $ordersToProcess = ($isFailed || $isPartial || $hasRemains)
                     ? Order::whereIn('id', $group['ids'])->get()
                     : collect();
-
-                $isCompleted = $newStatus === Order::STATUS_COMPLETED;
 
                 if ($isFailed) {
                     Order::whereIn('id', $group['ids'])->update(
@@ -621,7 +622,7 @@ class PlaceOrder extends Command
                     if ($isFailed) {
                         $refundAmount = $chargeAmount;
                         $note = "Hoàn tiền đơn hàng #{$processOrder->id} thất bại";
-                    } elseif ($isPartial) {
+                    } elseif ($isPartial || $hasRemains) {
                         $refundAmount = ($quantity > 0 && $remains > 0 && $chargeAmount > 0)
                             ? min(round(($remains / $quantity) * $chargeAmount, 2), $chargeAmount)
                             : 0;
@@ -829,43 +830,6 @@ class PlaceOrder extends Command
      * Check status các đơn đang chờ hoàn (processing) từ provider
      * Chạy bằng: php artisan order_place refund-check
      */
-    protected function handleRefundCheck()
-    {
-        $this->info('Bắt đầu kiểm tra trạng thái orders đang chờ hoàn (processing)...');
-
-        $chunkSize = 500;
-        $processed = 0;
-
-        $totalCount = Order::where('status', Order::STATUS_PROCESSING)
-            ->count();
-
-        if ($totalCount === 0) {
-            $this->info('Không có order nào đang chờ hoàn.');
-            return 0;
-        }
-
-        $this->info("Tìm thấy {$totalCount} orders cần kiểm tra.");
-
-        Order::with(['service.providerService.provider'])
-            ->where('status', Order::STATUS_PROCESSING)
-            ->whereNotNull('provider_order_id')
-            ->orderBy('id')
-            ->chunk($chunkSize, function ($orders) use (&$processed, $totalCount) {
-                $groupedOrders = $orders->groupBy(fn($o) => $o->service->providerService->provider->id ?? null);
-                $groupedOrders->forget(null);
-
-                foreach ($groupedOrders as $providerOrders) {
-                    $this->processStatusBatch($providerOrders);
-                }
-
-                $processed += $orders->count();
-                $this->info("Tiến độ: {$processed}/{$totalCount}");
-            });
-
-        $this->info('Hoàn thành!');
-        return 0;
-    }
-
     /**
      * Cập nhật order khi thất bại hoàn toàn
      */

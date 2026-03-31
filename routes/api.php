@@ -212,6 +212,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/affiliate/users/{id}/commission-rate', [AffiliateController::class, 'setCommissionRate']);
 
     // Admin Deposits & Webhook Logs
+    Route::get('/admin/users/deposits', [DongtienController::class, 'adminUserDeposits']);
+    Route::get('/admin/users/{id}/deposits', [DongtienController::class, 'adminUserDepositHistory']);
     Route::get('/admin/deposits/trace', [DepositController::class, 'traceByTid']);
     Route::get('/admin/deposits', [DepositController::class, 'adminIndex']);
     Route::get('/admin/webhook-logs', [DepositController::class, 'webhookLogs']);
