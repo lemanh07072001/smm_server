@@ -272,6 +272,8 @@ class OrderController extends Controller
             'reactions'           => ['nullable', 'array'],
             'comments'            => ['nullable', 'string', 'max:5000'],
             'livestream_duration' => ['nullable', 'integer', 'min:1', 'max:1440'],
+            'time_vip'            => ['nullable', 'integer', 'min:1'],
+            'number_per_date'     => ['nullable', 'integer', 'min:1'],
             'internal_note'       => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -327,7 +329,8 @@ class OrderController extends Controller
             $order = $this->orderService->createOrderRecord(
                 $user, $service, $validated['link'], $validated['quantity'],
                 $amounts, 'web', $livestreamDuration,
-                $validated['comments'] ?? null, $validated['internal_note'] ?? null
+                $validated['comments'] ?? null, $validated['internal_note'] ?? null,
+                $validated['time_vip'] ?? null, $validated['number_per_date'] ?? null
             );
 
             DB::commit();
@@ -640,7 +643,8 @@ class OrderController extends Controller
                 $orders[] = $this->orderService->createOrderRecord(
                     $user, $service, $link, $quantity,
                     $amounts, 'web', $livestreamDuration,
-                    $validated['comments'] ?? null, $validated['internal_note'] ?? null
+                    $validated['comments'] ?? null, $validated['internal_note'] ?? null,
+                    $validated['time_vip'] ?? null, $validated['number_per_date'] ?? null
                 );
             }
 

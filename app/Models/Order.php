@@ -74,6 +74,8 @@ class Order extends Model
         'scan',
         'lost_count',
         'livestream_duration',
+        'time_vip',
+        'number_per_date',
         'retry_count',
         'is_priority',
         'canceled_at',
@@ -106,6 +108,8 @@ class Order extends Model
         'canceled_at' => 'datetime',
         'lost_count' => 'integer',
         'livestream_duration' => 'integer',
+        'time_vip' => 'integer',
+        'number_per_date' => 'integer',
         'retry_count' => 'integer',
         'is_priority' => 'integer',
     ];

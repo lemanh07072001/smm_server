@@ -114,7 +114,9 @@ class OrderCreationService
         string $source = 'web',
         int $livestreamDuration = 0,
         ?string $comments = null,
-        ?string $internalNote = null
+        ?string $internalNote = null,
+        ?int $timeVip = null,
+        ?int $numberPerDate = null
     ): Order {
         if ($user->role === User::ROLE_RESELLER && empty($internalNote)) {
             $internalNote = "[Reseller] agent_price={$service->agent_price}, sell_rate={$amounts['sellRate']}, charge={$amounts['chargeAmount']}";
@@ -128,6 +130,8 @@ class OrderCreationService
             'link'                => $link,
             'quantity'            => $quantity,
             'livestream_duration' => $livestreamDuration ?: 0,
+            'time_vip'            => $timeVip,
+            'number_per_date'     => $numberPerDate,
             'comments'            => $comments,
             'internal_note'       => $internalNote,
             'status'              => Order::STATUS_PENDING,
