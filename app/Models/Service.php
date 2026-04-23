@@ -55,6 +55,8 @@ class Service extends Model
                 'fb_share'              => 'Share Facebook',
                 'fb_share_content'      => 'Share Content Facebook',
                 'fb_comment'            => 'Comment Facebook',
+                'fb_feel_vip'           => 'Cảm xúc VIP Facebook',
+                'fb_comment_vip'        => 'Comment VIP Facebook',
                 'fb_mix'                => 'Facebook Mix',
                 'fb_add_friends'        => 'Facebook Add Friends',
                 'fb_view_livestream'    => 'Buff View Livestream',
@@ -118,12 +120,14 @@ class Service extends Model
     ];
 
     public const FEEL_FORM = [
-        'fb_feel'
+        'fb_feel',
+        'fb_feel_vip',
     ];
 
     public const COMMENT_FORM = [
         'fb_comment',
-        'fb_share_content'
+        'fb_comment_vip',
+        'fb_share_content',
     ];
 
     protected $fillable = [

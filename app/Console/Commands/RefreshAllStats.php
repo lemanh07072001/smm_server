@@ -31,6 +31,7 @@ class RefreshAllStats extends Command
 
     private const SCANNABLE_DONGTIEN_TYPES = [
         Dongtien::TYPE_DEPOSIT,
+        Dongtien::TYPE_ADJUSTMENT,
         Dongtien::TYPE_CHARGE,
         Dongtien::TYPE_REFUND,
         'withdraw',
@@ -95,9 +96,11 @@ class RefreshAllStats extends Command
 
             $groups[$key]['total_quantity'] += $order->quantity;
 
-            if ($order->status === Order::STATUS_FAILED) {
+            // FAILED và CANCELED: hoàn toàn bộ → không tính vào total_charge (tránh thổi phồng doanh thu)
+            if (in_array($order->status, [Order::STATUS_FAILED, Order::STATUS_CANCELED])) {
                 $groups[$key]['total_refund'] += (float) $order->charge_amount;
             } else {
+                // COMPLETED, PARTIAL: tính doanh thu; partial có thêm refund_amount
                 $groups[$key]['total_charge']  += (float) $order->charge_amount;
                 $groups[$key]['total_cost']    += (float) $order->cost_amount;
                 $groups[$key]['total_profit']  += (float) $order->profit_amount;
@@ -168,6 +171,7 @@ class RefreshAllStats extends Command
 
             switch ($transaction->type) {
                 case Dongtien::TYPE_DEPOSIT:
+                case Dongtien::TYPE_ADJUSTMENT:
                     $groups[$key]['total_deposit']  += $amount;
                     break;
                 case Dongtien::TYPE_CHARGE:
@@ -228,16 +232,21 @@ class RefreshAllStats extends Command
                 SUM(profit_amount) as profit
             ")->first();
 
-        $depositRow = Dongtien::where('type', Dongtien::TYPE_DEPOSIT)
+        $depositRow = Dongtien::whereIn('type', [Dongtien::TYPE_DEPOSIT, Dongtien::TYPE_ADJUSTMENT])
             ->where('created_at', '>=', $todayStart)
             ->selectRaw('COUNT(*) as total_deposits, SUM(amount) as deposit_amount')
             ->first();
+
+        $refundAmount = Dongtien::where('type', Dongtien::TYPE_REFUND)
+            ->where('created_at', '>=', $todayStart)
+            ->sum('amount');
 
         $newCustomers = User::where('created_at', '>=', $todayStart)->count();
 
         $todayData = [
             'order_row'     => $orderRow,
             'deposit_row'   => $depositRow,
+            'refund_amount' => $refundAmount,
             'new_customers' => $newCustomers,
             'today_start'   => $todayStart,
         ];
@@ -274,7 +283,7 @@ class RefreshAllStats extends Command
                 'total_charge'      => (float) ($row->revenue           ?? 0),
                 'total_cost'        => (float) ($row->cost              ?? 0),
                 'total_profit'      => (float) ($row->profit            ?? 0),
-                'total_refund'      => 0,
+                'total_refund'      => (float) ($d['refund_amount']     ?? 0),
                 'new_customers'     => $d['new_customers'],
                 'total_deposits'    => (int)   ($dep->total_deposits    ?? 0),
                 'deposit_amount'    => (float) ($dep->deposit_amount    ?? 0),
@@ -320,7 +329,7 @@ class RefreshAllStats extends Command
                 SUM(total_profit)  as profit
             ")->first();
 
-        $depositAmount = Dongtien::where('type', Dongtien::TYPE_DEPOSIT)
+        $depositAmount = Dongtien::whereIn('type', [Dongtien::TYPE_DEPOSIT, Dongtien::TYPE_ADJUSTMENT])
             ->where('created_at', '>=', now()->subDays($days)->startOfDay())
             ->sum('amount');
 
