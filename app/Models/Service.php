@@ -55,7 +55,7 @@ class Service extends Model
                 'fb_share'              => 'Share Facebook',
                 'fb_share_content'      => 'Share Content Facebook',
                 'fb_comment'            => 'Comment Facebook',
-                'fb_feel_vip'           => 'Cảm xúc VIP Facebook',
+                'fb_reaction_vip'       => 'Cảm xúc VIP Facebook',
                 'fb_comment_vip'        => 'Comment VIP Facebook',
                 'fb_mix'                => 'Facebook Mix',
                 'fb_add_friends'        => 'Facebook Add Friends',
