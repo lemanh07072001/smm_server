@@ -40,6 +40,7 @@ class StoreUserRequest extends FormRequest
             'balance' => ['nullable', 'numeric', 'min:0'],
             'discount' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'is_active' => ['nullable', 'boolean'],
+            'tax_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ];
     }
 
@@ -58,13 +59,16 @@ class StoreUserRequest extends FormRequest
             'email.unique' => 'Email đã tồn tại.',
             'password.required' => 'Mật khẩu là bắt buộc.',
             'password.min' => 'Mật khẩu phải có ít nhất 6 ký tự.',
-            'role.in' => 'Role phải là 0 (admin), 1 (user) hoặc 2 (reseller).',
+            'role.in' => 'Role phải là 0 (admin), 1 (user), 2 (reseller), 3 (super_admin) hoặc 4 (tax).',
             'balance.numeric' => 'Số dư phải là số.',
             'balance.min' => 'Số dư phải lớn hơn hoặc bằng 0.',
             'discount.numeric' => 'Giảm giá phải là số.',
             'discount.min' => 'Giảm giá phải lớn hơn hoặc bằng 0.',
             'discount.max' => 'Giảm giá không được vượt quá 100%.',
             'is_active.boolean' => 'Trạng thái phải là true hoặc false.',
+            'tax_percent.numeric' => 'Phần trăm thuế phải là số.',
+            'tax_percent.min' => 'Phần trăm thuế không được nhỏ hơn 0.',
+            'tax_percent.max' => 'Phần trăm thuế không được vượt quá 100.',
         ];
     }
 }
