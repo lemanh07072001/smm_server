@@ -18,7 +18,8 @@ class User extends Authenticatable
     public const ROLE_USER = 1;
     public const ROLE_RESELLER = 2;
     public const ROLE_SUPER_ADMIN = 3;
-    public const ROLES = [self::ROLE_ADMIN, self::ROLE_USER, self::ROLE_RESELLER, self::ROLE_SUPER_ADMIN];
+    public const ROLE_TAX = 4;
+    public const ROLES = [self::ROLE_ADMIN, self::ROLE_USER, self::ROLE_RESELLER, self::ROLE_SUPER_ADMIN, self::ROLE_TAX];
 
     /**
      * The attributes that are mass assignable.
@@ -32,6 +33,7 @@ class User extends Authenticatable
         'role',
         'balance',
         'discount',
+        'tax_percent',
         'api_key',
         'api_token',
         'is_active',
@@ -62,6 +64,7 @@ class User extends Authenticatable
         'role' => 'integer',
         'balance' => 'decimal:6',
         'discount' => 'decimal:2',
+        'tax_percent' => 'decimal:2',
         'is_active' => 'boolean',
         'referred_by' => 'integer',
         'affiliate_balance' => 'decimal:6',
@@ -95,6 +98,14 @@ class User extends Authenticatable
     public function isSuperAdmin(): bool
     {
         return $this->role === self::ROLE_SUPER_ADMIN;
+    }
+
+    /**
+     * Check if user is tax role.
+     */
+    public function isTax(): bool
+    {
+        return $this->role === self::ROLE_TAX;
     }
 
     /**
