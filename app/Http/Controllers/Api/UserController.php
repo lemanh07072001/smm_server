@@ -65,6 +65,13 @@ class UserController extends Controller
         $data = $request->validated();
         $data['password'] = Hash::make($data['password']);
 
+        $role = (int) ($data['role'] ?? User::ROLE_USER);
+        if ($role === User::ROLE_TAX) {
+            $data['tax_percent'] = $data['tax_percent'] ?? 10;
+        } else {
+            $data['tax_percent'] = null;
+        }
+
         $user = User::create($data);
 
         return response()->json([
@@ -100,6 +107,15 @@ class UserController extends Controller
             $data['password'] = Hash::make($data['password']);
         } else {
             unset($data['password']);
+        }
+
+        $newRole = array_key_exists('role', $data) ? (int) $data['role'] : (int) $user->role;
+        if ($newRole === User::ROLE_TAX) {
+            if (!array_key_exists('tax_percent', $data) && $user->tax_percent === null) {
+                $data['tax_percent'] = 10;
+            }
+        } else {
+            $data['tax_percent'] = null;
         }
 
         $user->update($data);
