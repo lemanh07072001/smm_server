@@ -87,11 +87,16 @@ class OrderCreationService
 
         if ($service->platform === 'fb_view_livestream') {
             $costAmount   = $costRate * $livestreamDuration * $quantity;
-            $chargeAmount = $sellRate * $livestreamDuration * $quantity;
+            $baseCharge   = $sellRate * $livestreamDuration * $quantity;
         } else {
             $costAmount   = $costRate * $quantity;
-            $chargeAmount = $sellRate * $quantity;
+            $baseCharge   = $sellRate * $quantity;
         }
+
+        $taxPercent = $user->isTax() ? (float) $user->tax_percent : null;
+        $chargeAmount = $taxPercent !== null
+            ? round($baseCharge * (1 + $taxPercent / 100), 2)
+            : $baseCharge;
 
         return [
             'costRate'     => $costRate,
@@ -99,6 +104,7 @@ class OrderCreationService
             'costAmount'   => $costAmount,
             'chargeAmount' => $chargeAmount,
             'profitAmount' => $chargeAmount - $costAmount,
+            'taxPercent'   => $taxPercent,
         ];
     }
 
@@ -138,6 +144,7 @@ class OrderCreationService
             'is_priority'         => $service->priority ?? Order::PRIORITY[1],
             'cost_rate'           => $amounts['costRate'],
             'sell_rate'           => $amounts['sellRate'],
+            'tax_percent'         => $amounts['taxPercent'] ?? null,
             'charge_amount'       => $amounts['chargeAmount'],
             'cost_amount'         => $amounts['costAmount'],
             'profit_amount'       => $amounts['profitAmount'],
