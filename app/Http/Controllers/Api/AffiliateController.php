@@ -110,6 +110,9 @@ class AffiliateController extends Controller
     {
         $request->validate([
             'amount' => ['required', 'numeric', 'min:1'],
+            'bank_name' => ['required', 'string', 'max:100'],
+            'account_number' => ['required', 'string', 'max:50'],
+            'account_holder' => ['required', 'string', 'max:100'],
         ]);
 
         $user = $request->user();
@@ -136,6 +139,9 @@ class AffiliateController extends Controller
         $withdrawal = AffiliateWithdrawal::create([
             'user_id' => $user->id,
             'amount' => $amount,
+            'bank_name' => $request->input('bank_name'),
+            'account_number' => $request->input('account_number'),
+            'account_holder' => $request->input('account_holder'),
             'status' => AffiliateWithdrawal::STATUS_PENDING,
         ]);
 
