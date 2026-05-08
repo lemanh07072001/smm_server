@@ -7,6 +7,7 @@ use App\Http\Requests\StoreServiceRequest;
 use App\Http\Requests\UpdateServiceRequest;
 use App\Models\CategoryGroup;
 use App\Models\Service;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -248,6 +249,27 @@ class ServiceController extends Controller
             ];
         });
 
+        $data['data'] = $this->applyRolePricing($data['data'], $request->user('sanctum'));
+
         return response()->json($data);
+    }
+
+    private function applyRolePricing($services, ?User $user)
+    {
+        $isReseller = $user && $user->role === User::ROLE_RESELLER;
+        $isAdmin = $user && in_array($user->role, [User::ROLE_ADMIN, User::ROLE_SUPER_ADMIN, User::ROLE_TAX], true);
+
+        if ($isAdmin) {
+            return $services;
+        }
+
+        return $services->map(function ($service) use ($isReseller) {
+            $svc = clone $service;
+            if ($isReseller && $svc->agent_price !== null) {
+                $svc->sell_rate = $svc->agent_price;
+            }
+            $svc->agent_price = null;
+            return $svc;
+        });
     }
 }

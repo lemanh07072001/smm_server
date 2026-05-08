@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCategoryGroupRequest;
 use App\Http\Requests\UpdateCategoryGroupRequest;
 use App\Models\CategoryGroup;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -166,7 +167,34 @@ class CategoryGroupController extends Controller
                 ->get();
         });
 
+        $data = $this->applyRolePricing($data, $request->user('sanctum'));
+
         return response()->json(['data' => $data]);
+    }
+
+    private function applyRolePricing($categoryGroups, ?User $user)
+    {
+        $isReseller = $user && $user->role === User::ROLE_RESELLER;
+        $isAdmin = $user && in_array($user->role, [User::ROLE_ADMIN, User::ROLE_SUPER_ADMIN, User::ROLE_TAX], true);
+
+        if ($isAdmin) {
+            return $categoryGroups;
+        }
+
+        return $categoryGroups->map(function ($group) use ($isReseller) {
+            $clone = clone $group;
+            if ($clone->relationLoaded('services')) {
+                $clone->setRelation('services', $clone->services->map(function ($service) use ($isReseller) {
+                    $svc = clone $service;
+                    if ($isReseller && $svc->agent_price !== null) {
+                        $svc->sell_rate = $svc->agent_price;
+                    }
+                    $svc->agent_price = null;
+                    return $svc;
+                }));
+            }
+            return $clone;
+        });
     }
 
     public function list(): JsonResponse
