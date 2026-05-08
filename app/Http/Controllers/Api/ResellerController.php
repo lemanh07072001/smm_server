@@ -142,7 +142,7 @@ class ResellerController extends Controller
             'provider_service_id' => ['nullable', 'integer', 'exists:provider_services,id'],
             'link'                => ['required', 'string', 'max:50000'],
             'quantity'            => ['required', 'integer', 'min:1', 'max:10000000'],
-            'comments'            => ['nullable', 'string', 'max:5000'],
+            'comments'            => ['nullable', 'string'],
             'livestream_duration' => ['nullable', 'integer', 'min:1', 'max:1440'],
         ]);
 
