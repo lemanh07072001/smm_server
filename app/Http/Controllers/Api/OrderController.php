@@ -270,11 +270,16 @@ class OrderController extends Controller
             'link'                => ['required', 'string', 'max:50000'],
             'quantity'            => ['required', 'integer', 'min:1', 'max:10000000'],
             'reactions'           => ['nullable', 'array'],
-            'comments'            => ['nullable', 'string', 'max:5000'],
+            'comments'            => ['nullable', 'string', 'max:60000'],
             'livestream_duration' => ['nullable', 'integer', 'min:1', 'max:1440'],
             'time_vip'            => ['nullable', 'integer', 'min:1'],
             'number_per_date'     => ['nullable', 'integer', 'min:1'],
             'internal_note'       => ['nullable', 'string', 'max:1000'],
+        ], [
+            'comments.max' => 'Tổng nội dung comment quá dài (tối đa 60.000 ký tự).',
+            'link.max' => 'Link quá dài.',
+            'quantity.min' => 'Số lượng phải lớn hơn 0.',
+            'quantity.max' => 'Số lượng vượt giới hạn.',
         ]);
 
         if (!empty($validated['comments'])) {
