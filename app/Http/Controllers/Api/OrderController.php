@@ -274,6 +274,7 @@ class OrderController extends Controller
             'livestream_duration' => ['nullable', 'integer', 'min:1', 'max:1440'],
             'time_vip'            => ['nullable', 'integer', 'min:1'],
             'number_per_date'     => ['nullable', 'integer', 'min:1'],
+            'scheduled_at'        => ['nullable', 'date', 'after:now'],
             'internal_note'       => ['nullable', 'string', 'max:1000'],
         ]);
 
@@ -330,7 +331,8 @@ class OrderController extends Controller
                 $user, $service, $validated['link'], $validated['quantity'],
                 $amounts, 'web', $livestreamDuration,
                 $validated['comments'] ?? null, $validated['internal_note'] ?? null,
-                $validated['time_vip'] ?? null, $validated['number_per_date'] ?? null
+                $validated['time_vip'] ?? null, $validated['number_per_date'] ?? null,
+                $validated['scheduled_at'] ?? null
             );
 
             DB::commit();
@@ -644,7 +646,8 @@ class OrderController extends Controller
                     $user, $service, $link, $quantity,
                     $amounts, 'web', $livestreamDuration,
                     $validated['comments'] ?? null, $validated['internal_note'] ?? null,
-                    $validated['time_vip'] ?? null, $validated['number_per_date'] ?? null
+                    $validated['time_vip'] ?? null, $validated['number_per_date'] ?? null,
+                    $validated['scheduled_at'] ?? null
                 );
             }
 

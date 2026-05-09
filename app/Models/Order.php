@@ -25,6 +25,7 @@ class Order extends Model
     public const STATUS_REFILLING = 'refilling'; // Hoàn toàn bộ
     public const STATUS_BEFORE_COMPLATE = 'before_complete'; // Hoàn toàn bộ
     public const STATUS_FAILED = 'failed'; // Thất bại
+    public const STATUS_SCHEDULED = 'scheduled'; // Hẹn giờ - chờ đến scheduled_at
 
     /**
      * Mapping status từ text sang số (reverse của STATUS_TEXT_V2)
@@ -81,6 +82,7 @@ class Order extends Model
         'is_priority',
         'canceled_at',
         'canceled_by',
+        'scheduled_at',
     ];
 
     /**
@@ -108,6 +110,7 @@ class Order extends Model
         'is_finalized' => 'boolean',
         'completed_at' => 'datetime',
         'canceled_at' => 'datetime',
+        'scheduled_at' => 'datetime',
         'lost_count' => 'integer',
         'livestream_duration' => 'integer',
         'time_vip' => 'integer',

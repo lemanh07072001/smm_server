@@ -122,11 +122,14 @@ class OrderCreationService
         ?string $comments = null,
         ?string $internalNote = null,
         ?int $timeVip = null,
-        ?int $numberPerDate = null
+        ?int $numberPerDate = null,
+        ?string $scheduledAt = null
     ): Order {
         if ($user->role === User::ROLE_RESELLER && empty($internalNote)) {
             $internalNote = "[Reseller] agent_price={$service->agent_price}, sell_rate={$amounts['sellRate']}, charge={$amounts['chargeAmount']}";
         }
+
+        $isScheduled = $scheduledAt !== null && \Carbon\Carbon::parse($scheduledAt)->isFuture();
 
         $order = Order::create([
             'user_id'             => $user->id,
@@ -138,9 +141,10 @@ class OrderCreationService
             'livestream_duration' => $livestreamDuration ?: 0,
             'time_vip'            => $timeVip,
             'number_per_date'     => $numberPerDate,
+            'scheduled_at'        => $isScheduled ? $scheduledAt : null,
             'comments'            => $comments,
             'internal_note'       => $internalNote,
-            'status'              => Order::STATUS_PENDING,
+            'status'              => $isScheduled ? Order::STATUS_SCHEDULED : Order::STATUS_PENDING,
             'is_priority'         => $service->priority ?? Order::PRIORITY[1],
             'cost_rate'           => $amounts['costRate'],
             'sell_rate'           => $amounts['sellRate'],
@@ -191,6 +195,11 @@ class OrderCreationService
                 'charge_amount' => $amounts['chargeAmount'],
                 'link'          => $order->link,
             ]);
+
+        // Đơn hẹn giờ: chưa push queue, đợi command activate khi đến giờ
+        if ($order->status === Order::STATUS_SCHEDULED) {
+            return;
+        }
 
         $this->pushOrderToQueue($order);
     }

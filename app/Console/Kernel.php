@@ -2,6 +2,7 @@
 
 namespace App\Console;
 
+use App\Console\Commands\ActivateScheduledOrders;
 use App\Console\Commands\CheckBank;
 use App\Console\Commands\ExpireDeposits;
 use App\Console\Commands\RefreshAllStats;
@@ -11,6 +12,7 @@ use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 class Kernel extends ConsoleKernel
 {
     protected $commands = [
+        ActivateScheduledOrders::class,
         CheckBank::class,
         ExpireDeposits::class,
         RefreshAllStats::class,
@@ -69,6 +71,13 @@ class Kernel extends ConsoleKernel
             ->everyMinute()
             ->withoutOverlapping()
             ->appendOutputTo(storage_path('logs/activity-log-save.log'));
+
+        // Kích hoạt đơn hẹn giờ đã đến giờ chạy (mỗi 1 phút)
+        $schedule->command('order:activate-scheduled')
+            ->runInBackground()
+            ->everyMinute()
+            ->withoutOverlapping()
+            ->appendOutputTo(storage_path('logs/activate-scheduled.log'));
     }
 
     /**
