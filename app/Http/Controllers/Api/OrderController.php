@@ -186,7 +186,7 @@ class OrderController extends Controller
                 'id', 'user_id', 'service_id', 'provider_service_id',
                 'provider_order_id', 'link', 'quantity', 'status',
                 'charge_amount', 'start_count', 'remains',
-                'created_at', 'updated_at', 'completed_at'
+                'created_at', 'updated_at', 'completed_at', 'scheduled_at'
             ])
             ->with(['service:id,name,sell_rate,group_id'])
             ->where('user_id', $userId);
