@@ -494,12 +494,35 @@ class DashboardController extends Controller
             $days = $firstOrder ? max(1, (int) ceil((time() - strtotime($firstOrder)) / 86400)) : 1;
         }
 
-        // Doanh thu thực = tiền user thanh toán (dongtien type=charge)
-        $revenue  = $cashFlow['payment']['amount'];
-        $cost     = (float) ($report->cost ?? 0);
-        // Hoàn tiền user = tiền thực hoàn vào ví (dongtien type=refund)
-        $refunded = $cashFlow['refund']['amount'];
-        $profit   = $revenue - $cost - $refunded - $affiliateCommission;
+        // ── Doanh thu thuần (trước VAT) = charge − refund ─────────────────
+        $grossCharge    = $cashFlow['payment']['amount'];
+        $refunded       = $cashFlow['refund']['amount'];
+        $revenuePreVat  = $grossCharge - $refunded;
+        $cost           = (float) ($report->cost ?? 0);
+
+        // ── VAT thu hộ (chỉ user role=TAX) ───────────────────────────────
+        // Công thức: VAT = charge × tax_pct / (100 + tax_pct), trừ refund tương ứng
+        $vatQuery = Order::whereNotNull('tax_percent');
+        if ($fromDt) $vatQuery->where('created_at', '>=', $fromDt);
+        if ($toDt)   $vatQuery->where('created_at', '<=', $toDt);
+        $vatCollected = (float) $vatQuery->selectRaw('
+            SUM((charge_amount - COALESCE(refund_amount, 0)) * tax_percent / (100 + tax_percent)) as vat
+        ')->value('vat');
+
+        // ── Doanh thu sau VAT (doanh thu thật của doanh nghiệp) ──────────
+        $revenuePostVat = $revenuePreVat - $vatCollected;
+
+        // ── Lợi nhuận trước thuế TNDN ────────────────────────────────────
+        $profitBeforeTax = $revenuePostVat - $cost - $affiliateCommission;
+
+        // ── Thuế TNDN (20% theo luật VN, chỉ tính nếu có lãi) ────────────
+        $corporateTaxRate = 0.20;
+        $corporateTax     = $profitBeforeTax > 0 ? round($profitBeforeTax * $corporateTaxRate, 2) : 0;
+        $profitAfterTax   = $profitBeforeTax - $corporateTax;
+
+        // Giữ alias cũ cho field 'revenue' và 'profit' để các metric phái sinh không vỡ
+        $revenue = $revenuePostVat;
+        $profit  = $profitAfterTax;
 
         // ── Chart data theo ngày ──────────────────────────────────────────
         $chartQuery = ReportOrderDaily::query();
@@ -532,8 +555,8 @@ class DashboardController extends Controller
 
         return response()->json([
             'data' => [
-                'profit'     => $profit,
-                'revenue'    => $revenue,
+                'profit'     => $profit,             // = lợi nhuận sau thuế TNDN (bottom line)
+                'revenue'    => $revenue,            // = doanh thu sau VAT (doanh thu thật)
                 'cost'       => $cost,
                 'refunded'   => $refunded,
                 'affiliate'  => $affiliateCommission,
@@ -541,6 +564,14 @@ class DashboardController extends Controller
                 'margin'     => $revenue > 0 ? round($profit / $revenue * 100, 1) : 0,
                 'avg_per_day' => round($profit / $days, 0),
                 'avg_revenue_per_day' => round($revenue / $days, 0),
+                // ── Breakdown thuế ────────────────────────────────────────
+                'revenue_pre_vat'     => $revenuePreVat,
+                'vat'                 => $vatCollected,
+                'revenue_post_vat'    => $revenuePostVat,
+                'profit_before_tax'   => $profitBeforeTax,
+                'corporate_tax_rate'  => $corporateTaxRate,
+                'corporate_tax'       => $corporateTax,
+                'profit_after_tax'    => $profitAfterTax,
                 'orders' => [
                     'total'     => (int) ($report->total_count     ?? 0),
                     'completed' => (int) ($report->completed_count ?? 0),

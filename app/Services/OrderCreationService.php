@@ -103,7 +103,8 @@ class OrderCreationService
             'sellRate'     => $sellRate,
             'costAmount'   => $costAmount,
             'chargeAmount' => $chargeAmount,
-            'profitAmount' => $chargeAmount - $costAmount,
+            // Lợi nhuận không bao gồm VAT (VAT là thu hộ, không phải tiền của ta)
+            'profitAmount' => $baseCharge - $costAmount,
             'taxPercent'   => $taxPercent,
         ];
     }
