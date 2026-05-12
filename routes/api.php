@@ -162,28 +162,60 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/deposits/{id}/cancel', [DepositController::class, 'cancel'])->middleware('throttle:10,1');
     Route::get('/deposits/{id}', [DepositController::class, 'show']);
 
-    // Dashboard
-    Route::get('/dashboard/overview', [DashboardController::class, 'overview']);
-    Route::get('/dashboard', [DashboardController::class, 'index']);
-    Route::get('/dashboard/today', [DashboardController::class, 'today']);
-    Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
-    Route::get('/dashboard/total-stats', [DashboardController::class, 'totalStats']);
+    // Dashboard (user-callable: dùng $request->user() trong controller)
     Route::get('/dashboard/user', [DashboardController::class, 'userStats']);
     Route::get('/dashboard/recent-logins', [DashboardController::class, 'recentLogins']);
     Route::get('/dashboard/purchased-services', [DashboardController::class, 'userPurchasedServices']);
     Route::get('/dashboard/purchased-categories', [DashboardController::class, 'userPurchasedCategories']);
-    Route::get('/dashboard/financial-stats', [DashboardController::class, 'financialStats']);
-    Route::get('/dashboard/order-stats', [DashboardController::class, 'orderStats']);
-    Route::get('/dashboard/revenue-chart', [DashboardController::class, 'revenueChart']);
-    Route::get('/dashboard/orders-chart', [DashboardController::class, 'ordersChart']);
-    
-    // Notifications (Admin)
-    Route::get('/admin/notifications', [NotificationController::class, 'adminIndex']);
-    Route::post('/admin/notifications', [NotificationController::class, 'store']);
-    Route::put('/admin/notifications/{id}', [NotificationController::class, 'update']);
-    Route::post('/admin/notifications/{id}/status', [NotificationController::class, 'updateStatus']);
-    Route::delete('/admin/notifications/{id}', [NotificationController::class, 'adminDestroy']);
-    Route::post('/admin/notifications/delete-multiple', [NotificationController::class, 'adminDestroyMultiple']);
+
+    // ── Admin-only routes (yêu cầu role admin/super_admin) ──────────────
+    Route::middleware('admin')->group(function () {
+        // Dashboard system-wide
+        Route::get('/dashboard/overview', [DashboardController::class, 'overview']);
+        Route::get('/dashboard', [DashboardController::class, 'index']);
+        Route::get('/dashboard/today', [DashboardController::class, 'today']);
+        Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
+        Route::get('/dashboard/total-stats', [DashboardController::class, 'totalStats']);
+        Route::get('/dashboard/financial-stats', [DashboardController::class, 'financialStats']);
+        Route::get('/dashboard/order-stats', [DashboardController::class, 'orderStats']);
+        Route::get('/dashboard/revenue-chart', [DashboardController::class, 'revenueChart']);
+        Route::get('/dashboard/orders-chart', [DashboardController::class, 'ordersChart']);
+
+        // Notifications (Admin)
+        Route::get('/admin/notifications', [NotificationController::class, 'adminIndex']);
+        Route::post('/admin/notifications', [NotificationController::class, 'store']);
+        Route::put('/admin/notifications/{id}', [NotificationController::class, 'update']);
+        Route::post('/admin/notifications/{id}/status', [NotificationController::class, 'updateStatus']);
+        Route::delete('/admin/notifications/{id}', [NotificationController::class, 'adminDestroy']);
+        Route::post('/admin/notifications/delete-multiple', [NotificationController::class, 'adminDestroyMultiple']);
+
+        // Admin Affiliate
+        Route::get('/admin/affiliate/withdrawals', [AffiliateController::class, 'adminWithdrawals']);
+        Route::post('/admin/affiliate/withdrawals/{id}/approve', [AffiliateController::class, 'approve']);
+        Route::post('/admin/affiliate/withdrawals/{id}/reject', [AffiliateController::class, 'reject']);
+        Route::post('/admin/affiliate/users/{id}/commission-rate', [AffiliateController::class, 'setCommissionRate']);
+
+        // Admin Deposits & Webhook Logs
+        Route::get('/admin/users/deposits', [DongtienController::class, 'adminUserDeposits']);
+        Route::get('/admin/users/{id}/deposits', [DongtienController::class, 'adminUserDepositHistory']);
+        Route::get('/admin/deposits/trace', [DepositController::class, 'traceByTid']);
+        Route::get('/admin/deposits', [DepositController::class, 'adminIndex']);
+        Route::get('/admin/webhook-logs', [DepositController::class, 'webhookLogs']);
+
+        // Admin Transaction Banks
+        Route::get('/admin/transaction-banks', [TransactionBankController::class, 'index']);
+        Route::post('/admin/transaction-banks/{id}/manual-credit', [TransactionBankController::class, 'manualCredit']);
+
+        // Admin Bank Auto
+        Route::get('/admin/bank-auto/{id}/logs', [BankAutoController::class, 'logs']);
+        Route::middleware('throttle:30,1')->group(function () {
+            Route::post('/admin/bank-auto/{id}/cancel', [BankAutoController::class, 'cancel']);
+            Route::post('/admin/bank-auto/{id}/manual-credit', [BankAutoController::class, 'manualCredit']);
+            Route::post('/admin/bank-auto/{id}/approve', [BankAutoController::class, 'approve']);
+            Route::post('/admin/bank-auto/{id}/reject', [BankAutoController::class, 'reject']);
+            Route::post('/admin/bank-auto/{id}/credit', [BankAutoController::class, 'credit']);
+        });
+    });
 
     // Settings
     Route::get('/settings', [SettingController::class, 'index']);
@@ -197,40 +229,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/upload/images', [UploadController::class, 'uploadMultipleImages']);
     Route::delete('/upload/image/{filename}', [UploadController::class, 'deleteImage']);
 
-    // Affiliate
+    // Affiliate (user-callable)
     Route::get('/affiliate/dashboard', [AffiliateController::class, 'dashboard']);
     Route::get('/affiliate/commissions', [AffiliateController::class, 'commissions']);
     Route::get('/affiliate/referrals', [AffiliateController::class, 'referrals']);
     Route::get('/affiliate/link', [AffiliateController::class, 'getLink']);
     Route::post('/affiliate/withdraw', [AffiliateController::class, 'withdraw'])->middleware('throttle:5,1');
     Route::get('/affiliate/withdrawals', [AffiliateController::class, 'withdrawals']);
-
-    // Admin Affiliate
-    Route::get('/admin/affiliate/withdrawals', [AffiliateController::class, 'adminWithdrawals']);
-    Route::post('/admin/affiliate/withdrawals/{id}/approve', [AffiliateController::class, 'approve']);
-    Route::post('/admin/affiliate/withdrawals/{id}/reject', [AffiliateController::class, 'reject']);
-    Route::post('/admin/affiliate/users/{id}/commission-rate', [AffiliateController::class, 'setCommissionRate']);
-
-    // Admin Deposits & Webhook Logs
-    Route::get('/admin/users/deposits', [DongtienController::class, 'adminUserDeposits']);
-    Route::get('/admin/users/{id}/deposits', [DongtienController::class, 'adminUserDepositHistory']);
-    Route::get('/admin/deposits/trace', [DepositController::class, 'traceByTid']);
-    Route::get('/admin/deposits', [DepositController::class, 'adminIndex']);
-    Route::get('/admin/webhook-logs', [DepositController::class, 'webhookLogs']);
-
-    // Admin Transaction Banks (nạp tay từ GD ngân hàng raw)
-    Route::get('/admin/transaction-banks', [TransactionBankController::class, 'index']);
-    Route::post('/admin/transaction-banks/{id}/manual-credit', [TransactionBankController::class, 'manualCredit']);
-
-    // Admin Bank Auto
-    Route::get('/admin/bank-auto/{id}/logs', [BankAutoController::class, 'logs']);
-    Route::middleware('throttle:30,1')->group(function () {
-        Route::post('/admin/bank-auto/{id}/cancel', [BankAutoController::class, 'cancel']);
-        Route::post('/admin/bank-auto/{id}/manual-credit', [BankAutoController::class, 'manualCredit']);
-        Route::post('/admin/bank-auto/{id}/approve', [BankAutoController::class, 'approve']);
-        Route::post('/admin/bank-auto/{id}/reject', [BankAutoController::class, 'reject']);
-        Route::post('/admin/bank-auto/{id}/credit', [BankAutoController::class, 'credit']);
-    });
 
 });
 
