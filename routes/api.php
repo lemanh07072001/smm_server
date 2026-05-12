@@ -75,101 +75,121 @@ Route::get('/notifications', [NotificationController::class, 'index']);
 
 // Protected routes
 Route::middleware('auth:sanctum')->group(function () {
+    // ── Session ──────────────────────────────────────────────────────
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/profile', [AuthController::class, 'profile']);
 
-    // Categories
-    Route::get('/categories', [CategoryController::class, 'index']);
-    Route::post('/categories', [CategoryController::class, 'store']);
-    Route::post('/categories/delete-multiple', [CategoryController::class, 'destroyMultiple']);
-    Route::get('/categories/{id}', [CategoryController::class, 'show']);
-    Route::post('/categories/{id}', [CategoryController::class, 'update']);
-    Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
-
-    // Category Groups
-    Route::get('/category-groups', [CategoryGroupController::class, 'index']);
-    Route::post('/category-groups', [CategoryGroupController::class, 'store']);
-    Route::post('/category-groups/delete-multiple', [CategoryGroupController::class, 'destroyMultiple']);
-    Route::get('/category-groups/all', [CategoryGroupController::class, 'all']);
-    Route::get('/category-groups/{id}', [CategoryGroupController::class, 'show']);
-    Route::post('/category-groups/{id}', [CategoryGroupController::class, 'update']);
-    Route::delete('/category-groups/{id}', [CategoryGroupController::class, 'destroy']);
-
-    // Partner Providers (allowed - dành cho admin xem khi thêm provider)
-    Route::get('/partner-providers/allowed', [PartnerProviderController::class, 'allowed']);
-
-    // Providers
-    Route::get('/providers', [ProviderController::class, 'index']);
-    Route::post('/providers', [ProviderController::class, 'store']);
-    Route::post('/providers/delete-multiple', [ProviderController::class, 'destroyMultiple']);
-    Route::get('/providers/{id}', [ProviderController::class, 'show']);
-    Route::post('/providers/{id}', [ProviderController::class, 'update']);
-    Route::delete('/providers/{id}', [ProviderController::class, 'destroy']);
-
-    // Provider Services
-    Route::get('/provider-services', [ProviderServiceController::class, 'index']);
-    Route::post('/provider-services', [ProviderServiceController::class, 'store']);
-    Route::post('/provider-services/delete-multiple', [ProviderServiceController::class, 'destroyMultiple']);
-    Route::get('/provider-services/all', [ProviderServiceController::class, 'all']);
-    Route::get('/provider-services/{id}', [ProviderServiceController::class, 'show']);
-    Route::post('/provider-services/{id}', [ProviderServiceController::class, 'update']);
-    Route::delete('/provider-services/{id}', [ProviderServiceController::class, 'destroy']);
-
-    // Services
-    Route::get('/services', [ServiceController::class, 'index']);
-    Route::post('/services', [ServiceController::class, 'store']);
-    Route::post('/services/delete-multiple', [ServiceController::class, 'destroyMultiple']);
-
-    Route::get('/services/{id}', [ServiceController::class, 'show']);
-    Route::post('/services/{id}', [ServiceController::class, 'update']);
-    Route::delete('/services/{id}', [ServiceController::class, 'destroy']);
-
-    // Countries
-    Route::get('/countries', [CountryController::class, 'index']);
-
-    // Users
-    Route::get('/users', [UserController::class, 'index']);
-    Route::post('/users', [UserController::class, 'store']);
-    Route::post('/users/delete-multiple', [UserController::class, 'destroyMultiple']);
-    Route::get('/users/{id}', [UserController::class, 'show']);
-    Route::post('/users/{id}', [UserController::class, 'update']);
-    Route::delete('/users/{id}', [UserController::class, 'destroy']);
-    Route::post('/users/{id}/reset-password', [UserController::class, 'resetPassword']);
-    Route::post('/users/{id}/generate-api-key', [UserController::class, 'generateApiKey']);
+    // ── Current user actions ────────────────────────────────────────
     Route::post('/user/generate-api-key', [UserController::class, 'generateMyApiKey']);
     Route::get('/user/api-key', [UserController::class, 'getMyApiKey']);
-    Route::post('/users/{id}/adjust-balance', [UserController::class, 'adjustBalance']);
 
-    // Orders
-    Route::get('/orders', [OrderController::class, 'index']);
-    Route::get('/orders/user/{userId}', [OrderController::class, 'getOrdersByUser']);
-    Route::get('/orders/{orderId}/logs', [OrderController::class, 'getOrderLogs']);
+    // ── Orders (user creates/cancels, admin-or-self for view) ────────
     Route::post('/add-order', [OrderController::class, 'addOrder'])->middleware('throttle:60,1');
     Route::post('/orders/{orderId}/cancel', [OrderController::class, 'cancelOrder'])->middleware('throttle:30,1');
+    Route::get('/orders/user/{userId}', [OrderController::class, 'getOrdersByUser']);   // internal admin-or-self check
+    Route::get('/orders/{orderId}/logs', [OrderController::class, 'getOrderLogs']);     // internal admin-or-self check
 
-    // Code Transactions
-
-    // Transactions (Lịch sử giao dịch)
+    // ── Transactions & Deposits (user-scoped trong controller) ───────
     Route::get('/transactions', [DongtienController::class, 'index']);
-
-    // Deposits (Quản lý nạp tiền)
     Route::get('/deposits', [DepositController::class, 'index']);
     Route::get('/deposits/pending/current', [DepositController::class, 'currentPending']);
     Route::post('/deposits/pending', [DepositController::class, 'createPending'])->middleware('throttle:10,1');
     Route::post('/deposits/{id}/cancel', [DepositController::class, 'cancel'])->middleware('throttle:10,1');
     Route::get('/deposits/{id}', [DepositController::class, 'show']);
 
-    // Dashboard (user-callable: dùng $request->user() trong controller)
+    // ── Dashboard user-callable ─────────────────────────────────────
     Route::get('/dashboard/user', [DashboardController::class, 'userStats']);
     Route::get('/dashboard/recent-logins', [DashboardController::class, 'recentLogins']);
     Route::get('/dashboard/purchased-services', [DashboardController::class, 'userPurchasedServices']);
     Route::get('/dashboard/purchased-categories', [DashboardController::class, 'userPurchasedCategories']);
 
-    // ── Admin-only routes (yêu cầu role admin/super_admin) ──────────────
+    // ── Affiliate user-callable ─────────────────────────────────────
+    Route::get('/affiliate/dashboard', [AffiliateController::class, 'dashboard']);
+    Route::get('/affiliate/commissions', [AffiliateController::class, 'commissions']);
+    Route::get('/affiliate/referrals', [AffiliateController::class, 'referrals']);
+    Route::get('/affiliate/link', [AffiliateController::class, 'getLink']);
+    Route::post('/affiliate/withdraw', [AffiliateController::class, 'withdraw'])->middleware('throttle:5,1');
+    Route::get('/affiliate/withdrawals', [AffiliateController::class, 'withdrawals']);
+
+    // ── Admin-only routes (yêu cầu role admin/super_admin) ──────────
     Route::middleware('admin')->group(function () {
+        // Categories CRUD
+        Route::get('/categories', [CategoryController::class, 'index']);
+        Route::post('/categories', [CategoryController::class, 'store']);
+        Route::post('/categories/delete-multiple', [CategoryController::class, 'destroyMultiple']);
+        Route::get('/categories/{id}', [CategoryController::class, 'show']);
+        Route::post('/categories/{id}', [CategoryController::class, 'update']);
+        Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
+
+        // Category Groups CRUD
+        Route::get('/category-groups', [CategoryGroupController::class, 'index']);
+        Route::post('/category-groups', [CategoryGroupController::class, 'store']);
+        Route::post('/category-groups/delete-multiple', [CategoryGroupController::class, 'destroyMultiple']);
+        Route::get('/category-groups/all', [CategoryGroupController::class, 'all']);
+        Route::get('/category-groups/{id}', [CategoryGroupController::class, 'show']);
+        Route::post('/category-groups/{id}', [CategoryGroupController::class, 'update']);
+        Route::delete('/category-groups/{id}', [CategoryGroupController::class, 'destroy']);
+
+        // Partner Providers (admin view khi thêm provider)
+        Route::get('/partner-providers/allowed', [PartnerProviderController::class, 'allowed']);
+
+        // Providers CRUD
+        Route::get('/providers', [ProviderController::class, 'index']);
+        Route::post('/providers', [ProviderController::class, 'store']);
+        Route::post('/providers/delete-multiple', [ProviderController::class, 'destroyMultiple']);
+        Route::get('/providers/{id}', [ProviderController::class, 'show']);
+        Route::post('/providers/{id}', [ProviderController::class, 'update']);
+        Route::delete('/providers/{id}', [ProviderController::class, 'destroy']);
+
+        // Provider Services CRUD
+        Route::get('/provider-services', [ProviderServiceController::class, 'index']);
+        Route::post('/provider-services', [ProviderServiceController::class, 'store']);
+        Route::post('/provider-services/delete-multiple', [ProviderServiceController::class, 'destroyMultiple']);
+        Route::get('/provider-services/all', [ProviderServiceController::class, 'all']);
+        Route::get('/provider-services/{id}', [ProviderServiceController::class, 'show']);
+        Route::post('/provider-services/{id}', [ProviderServiceController::class, 'update']);
+        Route::delete('/provider-services/{id}', [ProviderServiceController::class, 'destroy']);
+
+        // Services CRUD (public read endpoints stay outside auth group)
+        Route::get('/services', [ServiceController::class, 'index']);
+        Route::post('/services', [ServiceController::class, 'store']);
+        Route::post('/services/delete-multiple', [ServiceController::class, 'destroyMultiple']);
+        Route::get('/services/{id}', [ServiceController::class, 'show']);
+        Route::post('/services/{id}', [ServiceController::class, 'update']);
+        Route::delete('/services/{id}', [ServiceController::class, 'destroy']);
+
+        // Countries (paginated admin list; public /countries/all vẫn open)
+        Route::get('/countries', [CountryController::class, 'index']);
+
+        // Users CRUD
+        Route::get('/users', [UserController::class, 'index']);
+        Route::post('/users', [UserController::class, 'store']);
+        Route::post('/users/delete-multiple', [UserController::class, 'destroyMultiple']);
+        Route::get('/users/{id}', [UserController::class, 'show']);
+        Route::post('/users/{id}', [UserController::class, 'update']);
+        Route::delete('/users/{id}', [UserController::class, 'destroy']);
+        Route::post('/users/{id}/reset-password', [UserController::class, 'resetPassword']);
+        Route::post('/users/{id}/generate-api-key', [UserController::class, 'generateApiKey']);
+        Route::post('/users/{id}/adjust-balance', [UserController::class, 'adjustBalance']);
+
+        // Orders (admin list)
+        Route::get('/orders', [OrderController::class, 'index']);
+
+        // Settings CRUD (public read /settings/all & /settings/public vẫn open)
+        Route::get('/settings', [SettingController::class, 'index']);
+        Route::post('/settings/save', [SettingController::class, 'save']);
+        Route::post('/settings', [SettingController::class, 'update']);
+        Route::get('/settings/{key}', [SettingController::class, 'show']);
+        Route::delete('/settings/{key}', [SettingController::class, 'destroy']);
+
+        // Upload
+        Route::post('/upload/image', [UploadController::class, 'uploadImage']);
+        Route::post('/upload/images', [UploadController::class, 'uploadMultipleImages']);
+        Route::delete('/upload/image/{filename}', [UploadController::class, 'deleteImage']);
+
         // Dashboard system-wide
         Route::get('/dashboard/overview', [DashboardController::class, 'overview']);
         Route::get('/dashboard', [DashboardController::class, 'index']);
@@ -216,26 +236,6 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/admin/bank-auto/{id}/credit', [BankAutoController::class, 'credit']);
         });
     });
-
-    // Settings
-    Route::get('/settings', [SettingController::class, 'index']);
-    Route::post('/settings/save', [SettingController::class, 'save']);
-    Route::post('/settings', [SettingController::class, 'update']);
-    Route::get('/settings/{key}', [SettingController::class, 'show']);
-    Route::delete('/settings/{key}', [SettingController::class, 'destroy']);
-
-    // Upload
-    Route::post('/upload/image', [UploadController::class, 'uploadImage']);
-    Route::post('/upload/images', [UploadController::class, 'uploadMultipleImages']);
-    Route::delete('/upload/image/{filename}', [UploadController::class, 'deleteImage']);
-
-    // Affiliate (user-callable)
-    Route::get('/affiliate/dashboard', [AffiliateController::class, 'dashboard']);
-    Route::get('/affiliate/commissions', [AffiliateController::class, 'commissions']);
-    Route::get('/affiliate/referrals', [AffiliateController::class, 'referrals']);
-    Route::get('/affiliate/link', [AffiliateController::class, 'getLink']);
-    Route::post('/affiliate/withdraw', [AffiliateController::class, 'withdraw'])->middleware('throttle:5,1');
-    Route::get('/affiliate/withdrawals', [AffiliateController::class, 'withdrawals']);
 
 });
 
