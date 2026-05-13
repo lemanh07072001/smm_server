@@ -64,6 +64,7 @@ Route::get('/countries/all', [CountryController::class, 'all']);
 Route::get('/settings/all', [SettingController::class, 'all']);
 Route::get('/settings/public', [SettingController::class, 'publicIndex']);
 
+
 // Public Statistics API
 Route::get('/statistics/summary', [StatisticsController::class, 'summary']);
 Route::get('/statistics/revenue', [StatisticsController::class, 'revenue']);
