@@ -15,6 +15,7 @@ class ProviderFactory
         'smmking'            => GenericSmmProvider::class,
         'smmapir'            => GenericSmmProvider::class,
         'smmzone'            => GenericSmmProvider::class,
+        'gianglike'          => GenericSmmProvider::class,
 
         // Providers có format/logic riêng
         'smm_panel'          => SmmPanelProvider::class,
