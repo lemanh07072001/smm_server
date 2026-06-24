@@ -8,7 +8,6 @@ use App\Models\Dongtien;
 use App\Models\Order;
 use App\Models\Service;
 use App\Models\User;
-use App\Services\Providers\ProviderFactory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -52,10 +51,6 @@ class OrderCreationService
 
         if (!$provider->is_active) {
             return ['error' => 'Nhà cung cấp dịch vụ hiện không hoạt động.', 'code' => 422];
-        }
-
-        if (!ProviderFactory::isSupported($provider->code)) {
-            return ['error' => 'Provider không được hỗ trợ: ' . $provider->code, 'code' => 400];
         }
 
         return ['service' => $service];

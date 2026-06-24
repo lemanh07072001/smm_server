@@ -3,7 +3,6 @@
 namespace App\Services\Providers;
 
 use App\Models\Provider;
-use InvalidArgumentException;
 
 class ProviderFactory
 {
@@ -17,33 +16,34 @@ class ProviderFactory
         'smmzone'            => GenericSmmProvider::class,
         'gianglike'          => GenericSmmProvider::class,
 
-        // Providers có format/logic riêng
+        // Providers có format/logic riêng (chỉ cần khai báo provider KHÁC format chuẩn ở đây)
         'smm_panel'          => SmmPanelProvider::class,
         'omo'                => OmoProvider::class,
         '1kview'             => OneKViewProvider::class,
         'buffviewer'         => BuffViewerProvider::class,
-        // Thêm provider mới ở đây:
-        // 'another_provider' => AnotherProvider::class,
+        // Provider dùng format chuẩn SMM panel KHÔNG cần khai báo —
+        // mặc định đã fallback về GenericSmmProvider.
     ];
 
     /**
      * Create provider instance by code.
-     * Throws exception nếu code chưa được đăng ký.
+     * Code có format/logic riêng thì dùng class tương ứng; còn lại
+     * mặc định dùng GenericSmmProvider (chuẩn SMM panel: key/action/service/link/quantity).
      */
     public static function make(Provider $provider): ProviderInterface
     {
         $code = $provider->code;
 
-        if (!isset(self::$providers[$code])) {
-            throw new InvalidArgumentException("Provider [{$code}] chưa được đăng ký trong ProviderFactory.");
-        }
+        $class = self::$providers[$code] ?? GenericSmmProvider::class;
 
-        return (new self::$providers[$code]())->setProvider($provider);
+        return (new $class())->setProvider($provider);
     }
 
     public static function isSupported(string $code): bool
     {
-        return isset(self::$providers[$code]);
+        // Mọi provider đều được hỗ trợ: code đã đăng ký dùng class riêng,
+        // còn lại fallback về GenericSmmProvider.
+        return trim($code) !== '';
     }
 
     public static function getSupportedProviders(): array
