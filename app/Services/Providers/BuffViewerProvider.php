@@ -180,6 +180,29 @@ class BuffViewerProvider extends BaseProvider
             return false;
         }
 
+        // Response của cancel là mảng: [{"order": 123, "cancel": 1}, ...]
+        // Lỗi từng order: {"order": "456", "cancel": {"error": "Incorrect order ID"}}
+        // Chỉ thành công khi mọi order đều có cancel truthy và không phải error
+        if (!empty($response['is_cancel'])) {
+            if (empty($data)) {
+                return false;
+            }
+
+            foreach ($data as $item) {
+                if (!is_array($item)) {
+                    return false;
+                }
+
+                $cancel = $item['cancel'] ?? null;
+
+                if (is_array($cancel) || empty($cancel)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         return isset($data['order']) || isset($data['id']);
     }
 
@@ -275,8 +298,113 @@ class BuffViewerProvider extends BaseProvider
         return [
             'key'    => $this->provider->api_key,
             'action' => 'cancel',
-            'order'  => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
+            'orders' => is_array($orderIds) ? implode(',', $orderIds) : $orderIds,
         ];
+    }
+
+    /**
+     * Override canceledOrder: BuffViewer dùng endpoint khác nhau theo loại service,
+     * giống getOrderStatus. Query DB để tìm endpoint của từng order.
+     *
+     * Response format: [{"order": 123, "cancel": 1}, {"order": "456", "cancel": {"error": "..."}}]
+     */
+    public function canceledOrder(string|array $orderIds): array
+    {
+        $ids = is_array($orderIds) ? $orderIds : [$orderIds];
+
+        $endpointGroups = $this->groupOrderIdsByEndpoint($ids);
+
+        $mergedData     = [];
+        $allSuccess     = true;
+        $lastStatusCode = 0;
+
+        foreach ($endpointGroups as $suffix => $groupOrderIds) {
+            $url  = $this->getBaseUrl() . '/api/v2/' . $suffix;
+            $body = $this->buildCancelBody($groupOrderIds);
+
+            Log::debug('BuffViewer canceledOrder', [
+                'provider'  => $this->provider->code,
+                'url'       => $url,
+                'order_ids' => $groupOrderIds,
+            ]);
+
+            try {
+                $response       = Http::timeout(30)->asForm()->post($url, $body);
+                $lastStatusCode = $response->status();
+                $data           = $response->json() ?? [];
+
+                if (!$response->successful()) {
+                    $allSuccess = false;
+                }
+
+                Log::debug('BuffViewer canceledOrder Response', [
+                    'provider'    => $this->provider->code,
+                    'status_code' => $lastStatusCode,
+                    'raw_body'    => $response->body(),
+                ]);
+
+                // Provider trả lỗi chung cho cả request: {"error": "..."}
+                if (isset($data['error'])) {
+                    $allSuccess = false;
+
+                    foreach ($groupOrderIds as $oid) {
+                        $mergedData[] = ['order' => $oid, 'cancel' => ['error' => $data['error']]];
+                    }
+
+                    continue;
+                }
+
+                foreach ($data as $item) {
+                    if (is_array($item) && isset($item['order'])) {
+                        $mergedData[] = $item;
+                    }
+                }
+            } catch (\Exception $e) {
+                $allSuccess = false;
+
+                Log::error('BuffViewer canceledOrder Error', [
+                    'provider' => $this->provider->code,
+                    'url'      => $url,
+                    'error'    => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return [
+            'success'     => $allSuccess,
+            'status_code' => $lastStatusCode,
+            'body'        => json_encode($mergedData),
+            'data'        => $mergedData,
+            'is_cancel'   => true,
+        ];
+    }
+
+    /**
+     * Nhóm provider_order_id theo endpoint suffix dựa vào group_id của service
+     */
+    protected function groupOrderIdsByEndpoint(array $ids): array
+    {
+        $orders = Order::whereIn('provider_order_id', $ids)
+            ->with('service:id,group_id')
+            ->get(['id', 'provider_order_id', 'service_id']);
+
+        $suffixByOrderId = [];
+        foreach ($orders as $order) {
+            $groupId = $order->service->group_id ?? '';
+
+            $suffixByOrderId[(string) $order->provider_order_id] =
+                $this->groupEndpointMap[$groupId] ?? 'tiktok-views';
+        }
+
+        // ID không tìm thấy trong DB vẫn phải được gửi đi, dùng endpoint mặc định
+        $endpointGroups = [];
+        foreach ($ids as $id) {
+            $suffix = $suffixByOrderId[(string) $id] ?? 'tiktok-views';
+
+            $endpointGroups[$suffix][] = $id;
+        }
+
+        return $endpointGroups;
     }
 
     /**
